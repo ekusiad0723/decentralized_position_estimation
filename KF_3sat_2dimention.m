@@ -6,7 +6,7 @@ mass = 1;         % mass of the satellite
 kp = 0.01; % P gain
 kd = 0.2;  % D gain
 frameRate = 30; % frame rate of the video
-dtError = 0.01;  %誤差更新時間
+dtError = 0.1;  %誤差更新時間
 timesSpeed = 10; %動画の時間の速度倍率
 
 disp("calculating satellite trajectory...");
@@ -22,15 +22,9 @@ stepNum = ceil(t/dtError);
 errors = randn(9, stepNum);
 % 衛星の初期位置 状態変数z = [x1, y1, x2, y2, x3, y3, vx1, vy1, vx2, vy2, vx3, vy3]
 z0 = [xr1(1), xr1(2), xr2(1), xr2(2), xr3(1), xr3(2), 0, 0, 0, 0, 0, 0];
-time = [];
-z = [];
-for i = 1:stepNum
-    [tLocal, zLocal] = ode45(@(tLocal, zLocal) odeFcn(tLocal, zLocal, kp, kd, mass, l, r, q, errors(:, i)), [0, dtError], z0);
-    tLocal = tLocal + dtError*(i-1)*ones(size(tLocal));
-    time = [time; tLocal];
-    z = [z; zLocal];
-    z0 = z(end, :);
-end
+
+[time, z] = ode45(@(time, z) odeFcn(time, z, kp, kd, mass, l, r, q, errors(:, 1)), [0, t], z0);
+
 
 disp("satellite trajectory calculated.");
 disp("creating video...");
@@ -116,16 +110,16 @@ function dydt = odeFcn(t, y, kp, kd, mass, l, r, q, errors)
     dydt(5) = y(11);
     dydt(6) = y(12);
     % 衛星間の距離に観測ノイズを付加
-    r12 = sqrt((y(1)-y(3))^2 + (y(2)-y(4))^2) + sqrt(r) * randn;
-    r23 = sqrt((y(3)-y(5))^2 + (y(4)-y(6))^2) + sqrt(r) * randn;
-    r31 = sqrt((y(5)-y(1))^2 + (y(6)-y(2))^2) + sqrt(r) * randn;
+    r12 = sqrt((y(1)-y(3))^2 + (y(2)-y(4))^2);
+    r23 = sqrt((y(3)-y(5))^2 + (y(4)-y(6))^2);
+    r31 = sqrt((y(5)-y(1))^2 + (y(6)-y(2))^2);
     % 加速度フィードバック制御
-    dydt(7) = -kp/mass*((l-r12)/r12*(y(3)-y(1)) + (l-r31)/r31*(y(5)-y(1))) - kd*y(7) + sqrt(q) * randn + errors(1);
-    dydt(8) = -kp/mass*((l-r12)/r12*(y(4)-y(2)) + (l-r31)/r31*(y(6)-y(2))) - kd*y(8) + sqrt(q) * randn + errors(2);
-    dydt(9) = -kp/mass*((l-r12)/r12*(y(1)-y(3)) + (l-r23)/r23*(y(5)-y(3))) - kd*y(9) + sqrt(q) * randn + errors(3);
-    dydt(10) = -kp/mass*((l-r12)/r12*(y(2)-y(4)) + (l-r23)/r23*(y(6)-y(4))) - kd*y(10) + sqrt(q) * randn + errors(4);
-    dydt(11) = -kp/mass*((l-r23)/r23*(y(3)-y(5)) + (l-r31)/r31*(y(1)-y(5))) - kd*y(11) + sqrt(q) * randn + errors(5);
-    dydt(12) = -kp/mass*((l-r23)/r23*(y(4)-y(6)) + (l-r31)/r31*(y(2)-y(6))) - kd*y(12) + sqrt(q) * randn + errors(6);
+    dydt(7) = -kp/mass*((l-r12)/r12*(y(3)-y(1)) + (l-r31)/r31*(y(5)-y(1))) - kd*y(7);
+    dydt(8) = -kp/mass*((l-r12)/r12*(y(4)-y(2)) + (l-r31)/r31*(y(6)-y(2))) - kd*y(8);
+    dydt(9) = -kp/mass*((l-r12)/r12*(y(1)-y(3)) + (l-r23)/r23*(y(5)-y(3))) - kd*y(9);
+    dydt(10) = -kp/mass*((l-r12)/r12*(y(2)-y(4)) + (l-r23)/r23*(y(6)-y(4))) - kd*y(10);
+    dydt(11) = -kp/mass*((l-r23)/r23*(y(3)-y(5)) + (l-r31)/r31*(y(1)-y(5))) - kd*y(11);
+    dydt(12) = -kp/mass*((l-r23)/r23*(y(4)-y(6)) + (l-r31)/r31*(y(2)-y(6))) - kd*y(12);
 end
 
 function index = findNearTimeIndex(t, targetTime, startIndex)
