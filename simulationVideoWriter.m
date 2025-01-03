@@ -52,15 +52,16 @@ classdef simulationVideoWriter < handle
             end
 
             % アニメーションのプロット
-            dynamicHandles = [];
+            numDynamicObjects = length(obj.DynamicObjects);
+            dynamicHandles = gobjects(numDynamicObjects, 1);
             for i = 1:length(obj.DynamicObjects)
-                dynamicHandles(end+1) = scatter(obj.DynamicObjects{i}.xData(1), obj.DynamicObjects{i}.yData(1), 100, obj.DynamicObjects{i}.color, obj.DynamicObjects{i}.marker);
+                dynamicHandles(i) = scatter(obj.DynamicObjects{i}.xData(1), obj.DynamicObjects{i}.yData(1), 100, obj.DynamicObjects{i}.color, obj.DynamicObjects{i}.marker);
             end
 
             % 軌跡をプロット
-            trajHandles = [];
+            trajHandles = gobjects(numDynamicObjects, 1);
             for i = 1:length(obj.DynamicObjects)
-                trajHandles(end+1) = plot(obj.DynamicObjects{i}.xData(1), obj.DynamicObjects{i}.yData(1), obj.DynamicObjects{i}.color);
+                trajHandles(i) = plot(obj.DynamicObjects{i}.xData(1), obj.DynamicObjects{i}.yData(1), obj.DynamicObjects{i}.color);
             end
 
             % 判例を追加
@@ -80,7 +81,7 @@ classdef simulationVideoWriter < handle
             index = 1; % 時間ベクトルのインデックス
             for i = 1 : videoSteps
                 index = obj.findNearTimeIndex(t, i/obj.FrameRate*obj.TimesSpeed, index);
-                for j = 1:length(dynamicHandles)
+                for j = 1:numDynamicObjects
                     set(dynamicHandles(j), 'XData', obj.DynamicObjects{j}.xData(index), 'YData', obj.DynamicObjects{j}.yData(index));
                     set(trajHandles(j), 'XData', obj.DynamicObjects{j}.xData(1:index), 'YData', obj.DynamicObjects{j}.yData(1:index));
                 end
@@ -97,8 +98,6 @@ classdef simulationVideoWriter < handle
 
             % 動画ファイルを閉じる
             close(v);
-            % グラフを閉じる
-            close(figure);
         end
         
         function index = findNearTimeIndex(~, t, targetTime, startIndex)
