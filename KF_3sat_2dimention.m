@@ -1,13 +1,13 @@
-t = 300;  % simulation time
-q = 0;        % process noise variance
-r = 0;       % measurement noise variance
-l = 150;       % target distance
-mass = 1;         % mass of the satellite
-kp = 0.01; % P gain
-kd = 0.2;  % D gain
-frameRate = 30; % frame rate of the video
-dtError = 0.1;  %誤差更新時間
-timesSpeed = 10; %動画の時間の速度倍率
+SIMULATION_TIME = 60;  % simulation time
+Q = 0;        % process noise variance
+R = 0;       % measurement noise variance
+L = 150;       % target distance
+MASS = 1;         % mass of the satellite
+KP = 0.01; % P gain
+KD = 0.15;  % D gain
+FRAME_RATE = 60; % frame rate of the video
+DT_ERROR = 0.1;  %誤差更新時間
+TIMES_SPEED = 5; %動画の時間の速度倍率
 
 disp("calculating satellite trajectory...");
 
@@ -16,26 +16,34 @@ xr1 = [-100 + 200 * rand; -100 + 200 * rand];
 xr2 = [-100 + 200 * rand; -100 + 200 * rand];
 xr3 = [-100 + 200 * rand; -100 + 200 * rand];
 
-%誤差を更新しながら、PD制御で衛星間の距離をlに制御
-stepNum = ceil(t/dtError);
+%誤差を更新しながら、PD制御で衛星間の距離をLに制御
+stepNum = ceil(SIMULATION_TIME/DT_ERROR);
 % 誤差を先に生成
 errors = randn(9, stepNum);
 % 衛星の初期位置 状態変数z = [x1, y1, x2, y2, x3, y3, vx1, vy1, vx2, vy2, vx3, vy3]
 z0 = [xr1(1), xr1(2), xr2(1), xr2(2), xr3(1), xr3(2), 0, 0, 0, 0, 0, 0];
 
-[time, z] = ode45(@(time, z) odeFcn(time, z, kp, kd, mass, l, r, q, errors(:, 1)), [0, t], z0);
-
+options = odeset("MaxStep", TIMES_SPEED/FRAME_RATE/2); % 最大ステップ幅を設定 アニメーションがカクカクにならないように
+[t, z] = ode45(@(t, z) odeFcn(t, z, KP, KD, MASS, L, R, Q, errors(:, 1)), [0, SIMULATION_TIME], z0,  options);
 
 disp("satellite trajectory calculated.");
 disp("creating video...");
 
 % 動画ファイルの設定
-if exist('satelliteTrajectory.mp4', 'file') == 2
-    delete('satelliteTrajectory.mp4'); % 既存のファイルがあれば削除 この処理があるとVSCodeでエラーがなぜか出ない
+if ~exist('result', 'dir')
+    mkdir('result'); % resultフォルダが存在しない場合は作成
 end
-videoFile = 'satelliteTrajectory.mp4'; % 相対パスに変更
+
+% ファイル名の生成
+dateStr = datestr(now, 'yyyymmdd');
+fileIndex = 1;
+while exist(fullfile('result', sprintf('%s_%d_satelliteTrajectory.mp4', dateStr, fileIndex)), 'file')
+    fileIndex = fileIndex + 1;
+end
+videoFile = fullfile('result', sprintf('%s_%d_satelliteTrajectory.mp4', dateStr, fileIndex));
+
 v = VideoWriter(videoFile, 'MPEG-4');
-v.FrameRate = frameRate; % フレームレートを設定
+v.FrameRate = FRAME_RATE; % フレームレートを設定
 open(v);
 
 % グラフのサイズを設定
@@ -70,13 +78,13 @@ legend({'Satellite 1 Initial Position', 'Satellite 2 Initial Position', 'Satelli
         'Location', 'northeastoutside');
 
 % 倍速を表示
-text(1.05, 0.5, sprintf('%dx Speed', timesSpeed), 'Units', 'normalized', 'FontSize', 12);
+text(1.05, 0.5, sprintf('%dx Speed', TIMES_SPEED), 'Units', 'normalized', 'FontSize', 12);
 
 % アニメーションの更新
-videoSteps = t * frameRate / timesSpeed; % 動画のフレーム数
+videoSteps = SIMULATION_TIME * FRAME_RATE / TIMES_SPEED; % 動画のフレーム数
 index = 1; % 時間ベクトルのインデックス
 for i = 1 : videoSteps
-    index = findNearTimeIndex(time, i/frameRate*timesSpeed, index);
+    index = findNearTimeIndex(t, i/FRAME_RATE*TIMES_SPEED, index);
     set(h1, 'XData', z(index, 1), 'YData', z(index, 2)); % 衛星1の現在位置を更新
     set(h2, 'XData', z(index, 3), 'YData', z(index, 4)); % 衛星2の現在位置を更新
     set(h3, 'XData', z(index, 5), 'YData', z(index, 6)); % 衛星3の現在位置を更新
@@ -100,7 +108,8 @@ close(gcf);
 
 disp("video created.");
 
-function dydt = odeFcn(t, y, kp, kd, mass, l, r, q, errors)
+% 制御力のみをフィードバック
+function dydt = odeFcn(t, y, KP, KD, MASS, L, R, Q, errors)
     dydt = zeros(12, 1);
     % 衛星の状態量
     dydt(1) = y(7);
@@ -109,21 +118,22 @@ function dydt = odeFcn(t, y, kp, kd, mass, l, r, q, errors)
     dydt(4) = y(10);
     dydt(5) = y(11);
     dydt(6) = y(12);
-    % 衛星間の距離に観測ノイズを付加
+    % 衛星間の距離
     r12 = sqrt((y(1)-y(3))^2 + (y(2)-y(4))^2);
     r23 = sqrt((y(3)-y(5))^2 + (y(4)-y(6))^2);
     r31 = sqrt((y(5)-y(1))^2 + (y(6)-y(2))^2);
     % 加速度フィードバック制御
-    dydt(7) = -kp/mass*((l-r12)/r12*(y(3)-y(1)) + (l-r31)/r31*(y(5)-y(1))) - kd*y(7);
-    dydt(8) = -kp/mass*((l-r12)/r12*(y(4)-y(2)) + (l-r31)/r31*(y(6)-y(2))) - kd*y(8);
-    dydt(9) = -kp/mass*((l-r12)/r12*(y(1)-y(3)) + (l-r23)/r23*(y(5)-y(3))) - kd*y(9);
-    dydt(10) = -kp/mass*((l-r12)/r12*(y(2)-y(4)) + (l-r23)/r23*(y(6)-y(4))) - kd*y(10);
-    dydt(11) = -kp/mass*((l-r23)/r23*(y(3)-y(5)) + (l-r31)/r31*(y(1)-y(5))) - kd*y(11);
-    dydt(12) = -kp/mass*((l-r23)/r23*(y(4)-y(6)) + (l-r31)/r31*(y(2)-y(6))) - kd*y(12);
+    dydt(7) = -KP/MASS*((L-r12)/r12*(y(3)-y(1)) + (L-r31)/r31*(y(5)-y(1))) - KD*y(7);
+    dydt(8) = -KP/MASS*((L-r12)/r12*(y(4)-y(2)) + (L-r31)/r31*(y(6)-y(2))) - KD*y(8);
+    dydt(9) = -KP/MASS*((L-r12)/r12*(y(1)-y(3)) + (L-r23)/r23*(y(5)-y(3))) - KD*y(9);
+    dydt(10) = -KP/MASS*((L-r12)/r12*(y(2)-y(4)) + (L-r23)/r23*(y(6)-y(4))) - KD*y(10);
+    dydt(11) = -KP/MASS*((L-r23)/r23*(y(3)-y(5)) + (L-r31)/r31*(y(1)-y(5))) - KD*y(11);
+    dydt(12) = -KP/MASS*((L-r23)/r23*(y(4)-y(6)) + (L-r31)/r31*(y(2)-y(6))) - KD*y(12);
 end
 
 function index = findNearTimeIndex(t, targetTime, startIndex)
     % 指定された時間に最も近いインデックスを見つける
     [~, index] = min(abs(t(startIndex:end) - targetTime));
     index = index + startIndex - 1;
+    %disp("targetTime: " + targetTime + ", time: " + t(index) + ", index: " + index);
 end
