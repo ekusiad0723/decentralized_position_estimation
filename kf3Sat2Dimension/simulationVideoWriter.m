@@ -39,8 +39,8 @@ classdef simulationVideoWriter < handle
             % グラフのサイズを設定
             figure('Name', 'Simulation Video', 'Position', obj.WindowPosition); % 720pの解像度に設定
             hold on;
-            xlabel('x');
-            ylabel('y');
+            xlabel('x(m)');
+            ylabel('y(m)');
             title('Satellite Trajectory');
             xlim(obj.SpaceSize); % x軸の範囲を設定
             ylim(obj.SpaceSize); % y軸の範囲を設定
