@@ -1,25 +1,26 @@
 % filepath: /c:/Users/daisu/Documents/GitHub/decentralized_position_estimation/kf3Sat2Dimention.m
 % 定数の定義
+SIMULATION_TIME = 5400;  % simulation time
 Q = 0;        % process noise variance
 R = 0;       % measurement noise variance
-L = 150;       % target distance
-MASS = 1;         % mass of the satellite
-KP = 0.01; % P gain
-KD = 0.2;  % D gain
-SATURATION_LIMIT = 0.1; % 飽和入力の制限
+L = 0.3;       % target distance
+MASS = 0.5;         % mass of the satellite
+KP = 0.000001; % P gain
+KD = 0.002;  % D gain
+SATURATION_LIMIT = 0.05e-6; % 飽和入力の制限 N
 
-FRAME_RATE = 60; % frame rate of the video
+FRAME_RATE = 30; % frame rate of the video
 DT_ERROR = 0.1;  %誤差更新時間
-TIMES_SPEED = 5; %動画の時間の速度倍率
-SIMULATION_TIME = 60;  % simulation time
-
-
+TIMES_SPEED = 600; %動画の時間の速度倍率
+SPACE_SIZE = [-0.2, 0.2]; % 衛星の初期位置の範囲
+SIMULATION_VIDEO_WINDOW_POSITION = [0, 100, 1280, 720]; % ウィンドウの位置　[left bottom width height]
+FORCE_PLOT_WINDOW_POSITION = [100, 200, 1280, 720]; % ウィンドウの位置　[left bottom width height]
 disp("calculating satellite trajectory...");
 
 % 衛星の初期位置
-xr1 = [-100 + 200 * rand; -100 + 200 * rand];
-xr2 = [-100 + 200 * rand; -100 + 200 * rand];
-xr3 = [-100 + 200 * rand; -100 + 200 * rand];
+xr1 = [-0.2 + 0.4 * rand; -0.2 + 0.4 * rand];
+xr2 = [-0.2 + 0.4 * rand; -0.2 + 0.4 * rand];
+xr3 = [-0.2 + 0.4 * rand; -0.2 + 0.4 * rand];
 
 %誤差を更新しながら、PD制御で衛星間の距離をLに制御
 stepNum = ceil(SIMULATION_TIME/DT_ERROR);
@@ -39,17 +40,24 @@ disp("creating video...");
 if ~exist('result', 'dir')
     mkdir('result'); % resultフォルダが存在しない場合は作成
 end
+if ~exist(fullfile('result', 'trajectoryVideo'), 'dir')
+    mkdir(fullfile('result', 'trajectoryVideo')); % trajectoryVideoフォルダが存在しない場合は作成
+end
+if ~exist(fullfile('result', 'forceplot'), 'dir')
+    mkdir(fullfile('result', 'forceplot')); % forceplotフォルダが存在しない場合は作成
+end
 
 % ファイル名の生成
 dateStr = datetime("now", "Format", "yyyyMMdd");
 fileIndex = 1;
-while exist(fullfile('result', sprintf('%s_%d_satelliteTrajectory.mp4', dateStr, fileIndex)), 'file')
+
+while exist(fullfile('result', 'trajectoryVideo', sprintf('%s_%d_satelliteTrajectory.mp4', dateStr, fileIndex)), 'file') || exist(fullfile('result', 'forceplot', sprintf('%s_%d_forcePlot.png', dateStr, fileIndex)), 'file')
     fileIndex = fileIndex + 1;
 end
-videoFile = fullfile('result', sprintf('%s_%d_satelliteTrajectory.mp4', dateStr, fileIndex));
+videoFile = fullfile('result', 'trajectoryVideo', sprintf('%s_%d_satelliteTrajectory.mp4', dateStr, fileIndex));
 
 % simulationVideoWriterクラスを使用して動画を書き出す
-videoWriter = simulationVideoWriter(FRAME_RATE, TIMES_SPEED, SIMULATION_TIME, videoFile);
+videoWriter = simulationVideoWriter(FRAME_RATE, TIMES_SPEED, SIMULATION_TIME, SPACE_SIZE, SIMULATION_VIDEO_WINDOW_POSITION, videoFile);
 
 % 初期位置を追加
 videoWriter.addStaticObject(z(1, 1), z(1, 2), 'r', 'x'); % 衛星1の初期位置
@@ -61,9 +69,39 @@ videoWriter.addDynamicObject(z(:, 1), z(:, 2), 'r', 'o'); % 衛星1の現在位�
 videoWriter.addDynamicObject(z(:, 3), z(:, 4), 'g', 'o'); % 衛星2の現在位置
 videoWriter.addDynamicObject(z(:, 5), z(:, 6), 'b', 'o'); % 衛星3の現在位置
 
-videoWriter.writeVideo(t, z);
+videoWriter.writeVideo(t);
 
 disp("video created.");
+
+% 各衛星の出力の大きさを計算
+dt = diff(t);
+F1_x = MASS * diff(z(:, 7)) ./ dt * 1e6; % N -> μN
+F1_y = MASS * diff(z(:, 8)) ./ dt * 1e6; % N -> μN
+F2_x = MASS * diff(z(:, 9)) ./ dt * 1e6; % N -> μN
+F2_y = MASS * diff(z(:, 10)) ./ dt * 1e6; % N -> μN
+F3_x = MASS * diff(z(:, 11)) ./ dt * 1e6; % N -> μN
+F3_y = MASS * diff(z(:, 12)) ./ dt * 1e6; % N -> μN
+
+% 出力の大きさをプロット
+figure('Name', 'Force Plot', 'Position', FORCE_PLOT_WINDOW_POSITION);
+plot(t(1:end-1), F1_x, 'r', 'DisplayName', 'Satellite 1 X axis');
+hold on;
+plot(t(1:end-1), F1_y, 'r--', 'DisplayName', 'Satellite 1 Y axis');
+plot(t(1:end-1), F2_x, 'g', 'DisplayName', 'Satellite 2 X axis');
+plot(t(1:end-1), F2_y, 'g--', 'DisplayName', 'Satellite 2 Y axis');
+plot(t(1:end-1), F3_x, 'b', 'DisplayName', 'Satellite 3 X axis');
+plot(t(1:end-1), F3_y, 'b--', 'DisplayName', 'Satellite 3 Y axis');
+xlabel('Time (s)');
+ylabel('Force (μN)');
+title('Output Force of Satellites');
+legend;
+hold off;
+
+% force plotの保存
+forcePlotFile = fullfile('result', 'forceplot', sprintf('%s_%d_forcePlot.png', dateStr, fileIndex));
+saveas(gcf, forcePlotFile);
+
+disp("force plot created.");
 
 % 制御力のみをフィードバック
 function dydt = odeFcn(t, y, KP, KD, MASS, L, SATURATION_LIMIT)
@@ -88,10 +126,10 @@ function dydt = odeFcn(t, y, KP, KD, MASS, L, SATURATION_LIMIT)
     u6 = (1/MASS)*(-KP*((L-r23)/r23*(y(4)-y(6)) + (L-r31)/r31*(y(2)-y(6))) - KD*y(12));
     
     % 飽和入力の適用
-    dydt(7) = max(min(u1, SATURATION_LIMIT), -SATURATION_LIMIT);
-    dydt(8) = max(min(u2, SATURATION_LIMIT), -SATURATION_LIMIT);
-    dydt(9) = max(min(u3, SATURATION_LIMIT), -SATURATION_LIMIT);
-    dydt(10) = max(min(u4, SATURATION_LIMIT), -SATURATION_LIMIT);
-    dydt(11) = max(min(u5, SATURATION_LIMIT), -SATURATION_LIMIT);
-    dydt(12) = max(min(u6, SATURATION_LIMIT), -SATURATION_LIMIT);
+    dydt(7) = max(min(u1, SATURATION_LIMIT/MASS), -SATURATION_LIMIT/MASS);
+    dydt(8) = max(min(u2, SATURATION_LIMIT/MASS), -SATURATION_LIMIT/MASS);
+    dydt(9) = max(min(u3, SATURATION_LIMIT/MASS), -SATURATION_LIMIT/MASS);
+    dydt(10) = max(min(u4, SATURATION_LIMIT/MASS), -SATURATION_LIMIT/MASS);
+    dydt(11) = max(min(u5, SATURATION_LIMIT/MASS), -SATURATION_LIMIT/MASS);
+    dydt(12) = max(min(u6, SATURATION_LIMIT/MASS), -SATURATION_LIMIT/MASS);
 end

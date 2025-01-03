@@ -1,19 +1,23 @@
-% filepath: /C:/Users/daisu/Documents/GitHub/decentralized_position_estimation/SimulationVideoWriter.m
+% filepath: /C:/Users/daisu/Documents/GitHub/decentralized_position_estimation/simulationVideoWriter.m
 classdef simulationVideoWriter < handle
     properties
         FrameRate
         TimesSpeed
         SimulationTime
+        SpaceSize
+        WindowPosition
         FilePath
         StaticObjects
         DynamicObjects
     end
     
     methods
-        function obj = simulationVideoWriter(frameRate, timesSpeed, simulationTime, filePath)
+        function obj = simulationVideoWriter(frameRate, timesSpeed, simulationTime, spaceSize, windowPosition, filePath)
             obj.FrameRate = frameRate;
             obj.TimesSpeed = timesSpeed;
             obj.SimulationTime = simulationTime;
+            obj.SpaceSize = spaceSize;
+            obj.WindowPosition = windowPosition;
             obj.FilePath = filePath;
             obj.StaticObjects = {};
             obj.DynamicObjects = {};
@@ -27,19 +31,19 @@ classdef simulationVideoWriter < handle
             obj.DynamicObjects{end+1} = struct('xData', xData, 'yData', yData, 'color', color, 'marker', marker);
         end
         
-        function writeVideo(obj, t, z)
+        function writeVideo(obj, t)
             v = VideoWriter(obj.FilePath, 'MPEG-4');
             v.FrameRate = obj.FrameRate; % フレームレートを設定
             open(v);
 
             % グラフのサイズを設定
-            figure('Position', [100, 100, 1280, 720]); % 720pの解像度に設定
+            figure('Name', 'Simulation Video', 'Position', obj.WindowPosition); % 720pの解像度に設定
             hold on;
             xlabel('x');
             ylabel('y');
             title('Satellite Trajectory');
-            xlim([-300, 300]); % x軸の範囲を設定
-            ylim([-300, 300]); % y軸の範囲を設定
+            xlim(obj.SpaceSize); % x軸の範囲を設定
+            ylim(obj.SpaceSize); % y軸の範囲を設定
             axis equal; % アスペクト比を保持
 
             % 初期位置をプロット
@@ -93,6 +97,8 @@ classdef simulationVideoWriter < handle
 
             % 動画ファイルを閉じる
             close(v);
+            % グラフを閉じる
+            close(figure);
         end
         
         function index = findNearTimeIndex(~, t, targetTime, startIndex)
