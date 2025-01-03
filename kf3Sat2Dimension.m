@@ -1,4 +1,4 @@
-% filepath: /c:/Users/daisu/Documents/GitHub/decentralized_position_estimation/kf3Sat2Dimention.m
+% filepath: /c:/Users/daisu/Documents/GitHub/decentralized_position_estimation/kf3Sat2Dimension.m
 % 定数の定義
 SIMULATION_TIME = 5400;  % simulation time
 Q = 0;        % process noise variance
