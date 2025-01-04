@@ -11,10 +11,11 @@ SATURATION_LIMIT =  0.05e-6; % 飽和入力の制限 N
 
 FRAME_RATE = 30; % frame rate of the video
 TIME_STEP = 0.1; % time step
-TIMES_SPEED = 600; %動画の時間の速度倍率
+TIMES_SPEED = 1800; %動画の時間の速度倍率
 SPACE_SIZE = [-0.4, 0.4]; % 衛星の初期位置の範囲
-SIMULATION_VIDEO_WINDOW_POSITION = [0, 100, 1280, 720]; % ウィンドウの位置　[left bottom width height]
-FORCE_PLOT_WINDOW_POSITION = [100, 200, 1280, 720]; % ウィンドウの位置　[left bottom width height]
+INERTIAL_FRAME_SIMULATION_VIDEO_WINDOW_POSITION = [0, 100, 1280, 720]; % ウィンドウの位置　[left bottom width height]
+SAT1_FRAME_SIMULATION_VIDEO_WINDOW_POSITION = [100, 200, 1280, 720]; % ウィンドウの位置　[left bottom width height]
+FORCE_PLOT_WINDOW_POSITION = [200, 300, 1280, 720]; % ウィンドウの位置　[left bottom width height]
 disp("calculating satellite trajectory...");
 
 % 衛星の初期位置
@@ -60,30 +61,53 @@ if ~exist(baseDir,'dir')
     mkdir(baseDir);
 end
 
+inertialFrameSimulationVideoFileName ='satellite_trajectory_in_inertial_frame';
+sat1FrameSimulationVideoFileName = 'satellite_trajectory_in_sat1_frame';
+forcePlotFileName = 'satellites_control_force';
+
 fileIndex = 1;
 % 動画とforcePlotの両方を同じフォルダに保存するための重複チェック
-while exist(fullfile(baseDir, sprintf('%s_%d_satelliteTrajectoryInertialFrame.mp4', dateStr, fileIndex)), 'file') ...
-      || exist(fullfile(baseDir, sprintf('%s_%d_forcePlot.png', dateStr, fileIndex)), 'file')
+while exist(fullfile(baseDir, sprintf('%s_%d_%s.mp4', dateStr, fileIndex, inertialFrameSimulationVideoFileName)), 'file') ...
+        || exist(fullfile(baseDir, sprintf('%s_%d_%s.mp4', dateStr, fileIndex, sat1FrameSimulationVideoFileName)), 'file') ...
+        || exist(fullfile(baseDir, sprintf('%s_%d_%s.png', dateStr, fileIndex, forcePlotFileName)), 'file')
     fileIndex = fileIndex + 1;
 end
 
-videoFile = fullfile(baseDir, sprintf('%s_%d_satelliteTrajectory.mp4', dateStr, fileIndex));
+% ファイル設定
+inertialFrameSimulationVideoFile = fullfile(baseDir, sprintf('%s_%d_%s.mp4', dateStr, fileIndex, inertialFrameSimulationVideoFileName));
+sat1FrameSimulationVideoFile = fullfile(baseDir, sprintf('%s_%d_%s.mp4', dateStr, fileIndex, sat1FrameSimulationVideoFileName));
+forcePlotFile = fullfile(baseDir, sprintf('%s_%d_%s.png', dateStr, fileIndex, forcePlotFileName));
 
+% 慣性系でのシミュレーション動画作成
 % simulationVideoWriterクラスを使用して動画を書き出す
-inertialFrameSimulationVideo = simulationVideoWriter(FRAME_RATE, TIMES_SPEED, SIMULATION_TIME, SPACE_SIZE, 'Simulation in Inertial Frame', SIMULATION_VIDEO_WINDOW_POSITION, videoFile);
+inertialFrameSimulationVideo = simulationVideoWriter(FRAME_RATE, TIMES_SPEED, SIMULATION_TIME, SPACE_SIZE, 'Simulation in Inertial Frame', INERTIAL_FRAME_SIMULATION_VIDEO_WINDOW_POSITION, inertialFrameSimulationVideoFile);
 inertialFrameSimulationVideo.addTime(t); % 時間を追加
 
 % 初期位置を追加
-inertialFrameSimulationVideo.addStaticObject(z(1, 1), z(1, 2), 'r', 'x'); % 衛星1の初期位置
-inertialFrameSimulationVideo.addStaticObject(z(1, 3), z(1, 4), 'g', 'x'); % 衛星2の初期位置
-inertialFrameSimulationVideo.addStaticObject(z(1, 5), z(1, 6), 'b', 'x'); % 衛星3の初期位置
+inertialFrameSimulationVideo.addStaticObject(z(1, 1), z(1, 2), 'r', 'x', 'Satellite 1 Initial Position'); 
+inertialFrameSimulationVideo.addStaticObject(z(1, 3), z(1, 4), 'g', 'x', 'Satellite 2 Initial Position'); 
+inertialFrameSimulationVideo.addStaticObject(z(1, 5), z(1, 6), 'b', 'x', 'Satellite 3 Initial Position'); 
 
 % 動的オブジェクトを追加
-inertialFrameSimulationVideo.addDynamicObject(z(:, 1), z(:, 2), 'r', 'o'); % 衛星1の現在位置
-inertialFrameSimulationVideo.addDynamicObject(z(:, 3), z(:, 4), 'g', 'o'); % 衛星2の現在位置
-inertialFrameSimulationVideo.addDynamicObject(z(:, 5), z(:, 6), 'b', 'o'); % 衛星3の現在位置
+inertialFrameSimulationVideo.addDynamicObject(z(:, 1), z(:, 2), 'r', 'o', 'Satellite 1 Current Position', 'Satellite 1 Trajectory'); 
+inertialFrameSimulationVideo.addDynamicObject(z(:, 3), z(:, 4), 'g', 'o', 'Satellite 2 Current Position', 'Satellite 3 Trajectory'); 
+inertialFrameSimulationVideo.addDynamicObject(z(:, 5), z(:, 6), 'b', 'o', 'Satellite 3 Current Position', 'Satellite 3 Trajectory'); 
 
 inertialFrameSimulationVideo.writeVideo();
+
+% 衛星1系でのシミュレーション動画作成
+% simulationVideoWriterクラスを使用して動画を書き出す
+sat1FrameSimulationVideo = simulationVideoWriter(FRAME_RATE, TIMES_SPEED, SIMULATION_TIME, SPACE_SIZE, 'Simulation in Satellite 1 Frame', SAT1_FRAME_SIMULATION_VIDEO_WINDOW_POSITION, sat1FrameSimulationVideoFile);
+sat1FrameSimulationVideo.addTime(tDiscrete);
+
+sat1FrameSimulationVideo.addStaticObject(0,0, 'r', 'o', 'Satellite 1');
+sat1FrameSimulationVideo.addStaticObject(zDiscrete(1, 3)-zDiscrete(1, 1), zDiscrete(1, 4)-zDiscrete(1, 2), 'g', 'x', 'Satellite 2 Initial Position');
+sat1FrameSimulationVideo.addStaticObject(zDiscrete(1, 5)-zDiscrete(1, 1), zDiscrete(1, 6)-zDiscrete(1, 2), 'b', 'x', 'Satellite 3 Initial Position');
+
+sat1FrameSimulationVideo.addDynamicObject(zDiscrete(:,3)-zDiscrete(:,1), zDiscrete(:,4)-zDiscrete(:,2), 'g', 'o', 'Satellite 2 Current Position', 'Satellite 2 Trajectory');
+sat1FrameSimulationVideo.addDynamicObject(zDiscrete(:,5)-zDiscrete(:,1), zDiscrete(:,6)-zDiscrete(:,2), 'b', 'o', 'Satellite 3 Current Position', 'Satellite 3 Trajectory');
+
+sat1FrameSimulationVideo.writeVideo();
 
 disp("video created.");
 
@@ -108,11 +132,10 @@ plot(t(1:end-1), F3_y, 'b--', 'DisplayName', 'Satellite 3 Y axis');
 xlabel('Time (s)');
 ylabel('Force (μN)');
 title('Output Force of Satellites');
-legend;
+legend();
 hold off;
 
 % force plotの保存
-forcePlotFile = fullfile(baseDir, sprintf('%s_%d_forcePlot.png', dateStr, fileIndex));
 saveas(gcf, forcePlotFile);
 
 disp("force plot created.");
