@@ -30,6 +30,7 @@ options = odeset("MaxStep", TIMES_SPEED/FRAME_RATE/2); % 最大ステップ幅�
 disp("satellite trajectory calculated.");
 
 
+% Position estimation using Kalmanfilter
 % Create equally spaced time points
 tDiscrete = (0:TIME_STEP:max(t))';
 % Interpolate state
@@ -61,7 +62,7 @@ end
 
 fileIndex = 1;
 % 動画とforcePlotの両方を同じフォルダに保存するための重複チェック
-while exist(fullfile(baseDir, sprintf('%s_%d_satelliteTrajectory.mp4', dateStr, fileIndex)), 'file') ...
+while exist(fullfile(baseDir, sprintf('%s_%d_satelliteTrajectoryInertialFrame.mp4', dateStr, fileIndex)), 'file') ...
       || exist(fullfile(baseDir, sprintf('%s_%d_forcePlot.png', dateStr, fileIndex)), 'file')
     fileIndex = fileIndex + 1;
 end
@@ -69,19 +70,20 @@ end
 videoFile = fullfile(baseDir, sprintf('%s_%d_satelliteTrajectory.mp4', dateStr, fileIndex));
 
 % simulationVideoWriterクラスを使用して動画を書き出す
-videoWriter = simulationVideoWriter(FRAME_RATE, TIMES_SPEED, SIMULATION_TIME, SPACE_SIZE, SIMULATION_VIDEO_WINDOW_POSITION, videoFile);
+inertialFrameSimulationVideo = simulationVideoWriter(FRAME_RATE, TIMES_SPEED, SIMULATION_TIME, SPACE_SIZE, 'Simulation in Inertial Frame', SIMULATION_VIDEO_WINDOW_POSITION, videoFile);
+inertialFrameSimulationVideo.addTime(t); % 時間を追加
 
 % 初期位置を追加
-videoWriter.addStaticObject(z(1, 1), z(1, 2), 'r', 'x'); % 衛星1の初期位置
-videoWriter.addStaticObject(z(1, 3), z(1, 4), 'g', 'x'); % 衛星2の初期位置
-videoWriter.addStaticObject(z(1, 5), z(1, 6), 'b', 'x'); % 衛星3の初期位置
+inertialFrameSimulationVideo.addStaticObject(z(1, 1), z(1, 2), 'r', 'x'); % 衛星1の初期位置
+inertialFrameSimulationVideo.addStaticObject(z(1, 3), z(1, 4), 'g', 'x'); % 衛星2の初期位置
+inertialFrameSimulationVideo.addStaticObject(z(1, 5), z(1, 6), 'b', 'x'); % 衛星3の初期位置
 
 % 動的オブジェクトを追加
-videoWriter.addDynamicObject(z(:, 1), z(:, 2), 'r', 'o'); % 衛星1の現在位置
-videoWriter.addDynamicObject(z(:, 3), z(:, 4), 'g', 'o'); % 衛星2の現在位置
-videoWriter.addDynamicObject(z(:, 5), z(:, 6), 'b', 'o'); % 衛星3の現在位置
+inertialFrameSimulationVideo.addDynamicObject(z(:, 1), z(:, 2), 'r', 'o'); % 衛星1の現在位置
+inertialFrameSimulationVideo.addDynamicObject(z(:, 3), z(:, 4), 'g', 'o'); % 衛星2の現在位置
+inertialFrameSimulationVideo.addDynamicObject(z(:, 5), z(:, 6), 'b', 'o'); % 衛星3の現在位置
 
-videoWriter.writeVideo(t);
+inertialFrameSimulationVideo.writeVideo();
 
 disp("video created.");
 

@@ -5,22 +5,30 @@ classdef simulationVideoWriter < handle
         TimesSpeed
         SimulationTime
         SpaceSize
+        FigureName
         WindowPosition
         FilePath
+        Time
         StaticObjects
         DynamicObjects
     end
     
     methods
-        function obj = simulationVideoWriter(frameRate, timesSpeed, simulationTime, spaceSize, windowPosition, filePath)
+        function obj = simulationVideoWriter(frameRate, timesSpeed, simulationTime, spaceSize, figureName, windowPosition, filePath)
             obj.FrameRate = frameRate;
             obj.TimesSpeed = timesSpeed;
             obj.SimulationTime = simulationTime;
             obj.SpaceSize = spaceSize;
+            obj.FigureName = figureName;
             obj.WindowPosition = windowPosition;
             obj.FilePath = filePath;
+            obj.Time = [];
             obj.StaticObjects = {};
             obj.DynamicObjects = {};
+        end
+
+        function addTime(obj, time)
+            obj.Time = time;
         end
         
         function addStaticObject(obj, x, y, color, marker)
@@ -31,13 +39,13 @@ classdef simulationVideoWriter < handle
             obj.DynamicObjects{end+1} = struct('xData', xData, 'yData', yData, 'color', color, 'marker', marker);
         end
         
-        function writeVideo(obj, t)
+        function writeVideo(obj)
             v = VideoWriter(obj.FilePath, 'MPEG-4');
             v.FrameRate = obj.FrameRate; % フレームレートを設定
             open(v);
 
             % グラフのサイズを設定
-            figure('Name', 'Simulation Video', 'Position', obj.WindowPosition); % 720pの解像度に設定
+            figure('Name', obj.FigureName, 'Position', obj.WindowPosition); % 720pの解像度に設定
             hold on;
             xlabel('x(m)');
             ylabel('y(m)');
@@ -80,14 +88,14 @@ classdef simulationVideoWriter < handle
             videoSteps = obj.SimulationTime * obj.FrameRate / obj.TimesSpeed; % 動画のフレーム数
             index = 1; % 時間ベクトルのインデックス
             for i = 1 : videoSteps
-                index = obj.findNearTimeIndex(t, i/obj.FrameRate*obj.TimesSpeed, index);
+                index = obj.findNearTimeIndex(obj.Time, i/obj.FrameRate*obj.TimesSpeed, index);
                 for j = 1:numDynamicObjects
                     set(dynamicHandles(j), 'XData', obj.DynamicObjects{j}.xData(index), 'YData', obj.DynamicObjects{j}.yData(index));
                     set(trajHandles(j), 'XData', obj.DynamicObjects{j}.xData(1:index), 'YData', obj.DynamicObjects{j}.yData(1:index));
                 end
 
                 % 現在時刻を更新
-                set(timeText, 'String', sprintf('t = %.2f s', t(index)));
+                set(timeText, 'String', sprintf('t = %.2f s', obj.Time(index)));
 
                 drawnow; % プロットを即座に更新
                 frame = getframe(gcf); % 現在のフレームを取得
