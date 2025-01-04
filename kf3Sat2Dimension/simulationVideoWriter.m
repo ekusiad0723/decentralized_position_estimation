@@ -1,6 +1,6 @@
 % filepath: /C:/Users/daisu/Documents/GitHub/decentralized_position_estimation/simulationVideoWriter.m
 classdef simulationVideoWriter < handle
-    properties
+    properties(SetAccess = private)
         FrameRate
         TimesSpeed
         SimulationTime
