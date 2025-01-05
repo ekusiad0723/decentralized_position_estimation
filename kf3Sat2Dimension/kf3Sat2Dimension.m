@@ -115,9 +115,9 @@ inertialFrameSimulationVideo.addStaticObject(z(1, 3), z(1, 4), 'g', 'x', 'Satell
 inertialFrameSimulationVideo.addStaticObject(z(1, 5), z(1, 6), 'b', 'x', 'Satellite 3 Initial Position'); 
 
 % 動的オブジェクトを追加
-inertialFrameSimulationVideo.addDynamicObject(z(:, 1), z(:, 2), 'r', 'o', 'Satellite 1 Current Position', 'Satellite 1 Trajectory'); 
-inertialFrameSimulationVideo.addDynamicObject(z(:, 3), z(:, 4), 'g', 'o', 'Satellite 2 Current Position', 'Satellite 3 Trajectory'); 
-inertialFrameSimulationVideo.addDynamicObject(z(:, 5), z(:, 6), 'b', 'o', 'Satellite 3 Current Position', 'Satellite 3 Trajectory'); 
+inertialFrameSimulationVideo.addDynamicObject(z(:, 1), z(:, 2), 'r', 'o', '-', 'Satellite 1 Current Position', 'Satellite 1 Trajectory'); 
+inertialFrameSimulationVideo.addDynamicObject(z(:, 3), z(:, 4), 'g', 'o', '-', 'Satellite 2 Current Position', 'Satellite 2 Trajectory');
+inertialFrameSimulationVideo.addDynamicObject(z(:, 5), z(:, 6), 'b', 'o', '-', 'Satellite 3 Current Position', 'Satellite 3 Trajectory'); 
 
 inertialFrameSimulationVideo.writeVideo();
 
@@ -130,11 +130,11 @@ sat1FrameSimulationVideo.addStaticObject(0,0, 'r', 'o', 'Satellite 1');
 sat1FrameSimulationVideo.addStaticObject(zKf(1,1), zKf(1,2), 'g', 'x', 'Satellite 2 Initial Position');
 sat1FrameSimulationVideo.addStaticObject(zKf(1,3), zKf(1,4), 'b', 'x', 'Satellite 3 Initial Position');
 
-sat1FrameSimulationVideo.addDynamicObject(zKf(:,1), zKf(:,2), 'g', 'o', 'Satellite 2 Current Position', 'Satellite 2 Trajectory');
-sat1FrameSimulationVideo.addDynamicObject(zKf(:,3), zKf(:,4), 'b', 'o', 'Satellite 3 Current Position', 'Satellite 3 Trajectory');
+sat1FrameSimulationVideo.addDynamicObject(zKf(:,1), zKf(:,2), 'g', 'o', '-', 'Satellite 2 Current Position', 'Satellite 2 Trajectory');
+sat1FrameSimulationVideo.addDynamicObject(zKf(:,3), zKf(:,4), 'b', 'o', '-', 'Satellite 3 Current Position', 'Satellite 3 Trajectory');
 
-sat1FrameSimulationVideo.addDynamicObject(zHat(:,1), zHat(:,2), 'g', 'x', 'Satellite 2 Estimated Position', 'Satellite 2 Estimated Trajectory');
-sat1FrameSimulationVideo.addDynamicObject(zHat(:,3), zHat(:,4), 'b', 'x', 'Satellite 3 Estimated Position', 'Satellite 3 Estimated Trajectory');
+sat1FrameSimulationVideo.addDynamicObject(zHat(:,1), zHat(:,2), 'g', '.', ':', 'Satellite 2 Estimated Position', 'Satellite 2 Estimated Trajectory');
+sat1FrameSimulationVideo.addDynamicObject(zHat(:,3), zHat(:,4), 'b', '.', ':', 'Satellite 3 Estimated Position', 'Satellite 3 Estimated Trajectory');
 
 sat1FrameSimulationVideo.writeVideo();
 
@@ -166,7 +166,7 @@ hold off;
 
 % force plotの保存
 saveas(gcf, forcePlotFile);
-
+close(gcf);
 disp("force plot created.");
 
 % 制御力のみをフィードバック

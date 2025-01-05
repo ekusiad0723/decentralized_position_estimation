@@ -35,8 +35,8 @@ classdef simulationVideoWriter < handle
             obj.StaticObjects{end+1} = struct('x', x, 'y', y, 'color', color, 'marker', marker, 'displayName', displayName);
         end
         
-        function addDynamicObject(obj, xData, yData, color, marker, displayName, trajectoryDisplayName)
-            obj.DynamicObjects{end+1} = struct('xData', xData, 'yData', yData, 'color', color, 'marker', marker, 'displayName', displayName, 'trajectoryDisplayName', trajectoryDisplayName);
+        function addDynamicObject(obj, xData, yData, color, marker, trajMarker, displayName, trajectoryDisplayName)
+            obj.DynamicObjects{end+1} = struct('xData', xData, 'yData', yData, 'color', color, 'marker', marker, 'trajMarker', trajMarker, 'displayName', displayName, 'trajectoryDisplayName', trajectoryDisplayName);
         end
         
         function writeVideo(obj)
@@ -71,8 +71,8 @@ classdef simulationVideoWriter < handle
                     obj.DynamicObjects{i}.yData(1), 100, obj.DynamicObjects{i}.color, ...
                     obj.DynamicObjects{i}.marker, 'DisplayName', obj.DynamicObjects{i}.displayName);
                 trajHandles(i) = plot(obj.DynamicObjects{i}.xData(1), ...
-                    obj.DynamicObjects{i}.yData(1), obj.DynamicObjects{i}.color, ...
-                    'DisplayName', obj.DynamicObjects{i}.trajectoryDisplayName);
+                    obj.DynamicObjects{i}.yData(1), 'Color', obj.DynamicObjects{i}.color, ...
+                    'LineStyle', obj.DynamicObjects{i}.trajMarker, 'DisplayName', obj.DynamicObjects{i}.trajectoryDisplayName);
             end
 
             legend('Location','northeastoutside');
@@ -97,18 +97,25 @@ classdef simulationVideoWriter < handle
                 
                 % 現在時刻を更新
                 set(timeText, 'String', sprintf('t = %.2f s', obj.Time(index)));
-                
+
                 drawnow;
                 frame = getframe(gcf);
                 writeVideo(v, frame);
             end
             hold off;
             close(v);
+            close(gcf);
         end
-        
-        function idx = findNearTimeIndex(~, t, targetTime, startIdx)
-            [~, localIdx] = min(abs(t(startIdx:end) - targetTime));
-            idx = startIdx + localIdx - 1;
+    end
+    methods(Static, Access = private)
+        function index = findNearTimeIndex(time, targetTime, startIndex)
+            for i = startIndex:length(time)
+                if time(i) >= targetTime
+                    index = i;
+                    return;
+                end
+            end
+            index = length(time);
         end
     end
 end
