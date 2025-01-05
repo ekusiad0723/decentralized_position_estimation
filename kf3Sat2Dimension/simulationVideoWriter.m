@@ -76,6 +76,11 @@ classdef simulationVideoWriter < handle
             end
 
             legend('Location','northeastoutside');
+            % 倍速を表示
+            text(1.05, 0.5, sprintf('%dx Speed', obj.TimesSpeed), 'Units', 'normalized', 'FontSize', 12);
+
+            % 現在時刻の表示
+            timeText = text(1.05, 0.45, sprintf('t = %.2f s', 0), 'Units', 'normalized', 'FontSize', 12);
 
             videoSteps = obj.SimulationTime * obj.FrameRate / obj.TimesSpeed;
             index = 1;
@@ -89,7 +94,10 @@ classdef simulationVideoWriter < handle
                     set(trajHandles(j), 'XData', obj.DynamicObjects{j}.xData(1:index), ...
                         'YData', obj.DynamicObjects{j}.yData(1:index));
                 end
-
+                
+                % 現在時刻を更新
+                set(timeText, 'String', sprintf('t = %.2f s', obj.Time(index)));
+                
                 drawnow;
                 frame = getframe(gcf);
                 writeVideo(v, frame);
