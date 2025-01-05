@@ -4,26 +4,26 @@ SIMULATION_TIME = 10800;  % simulation time
 L = 0.3;       % target distance
 M = 0.5;         % mass of the satellite
 KP = 0.000001; % P gain
-KD =  0.0005;  % D gain
+KD =  0.001;  % D gain
 SATURATION_LIMIT =  0.05e-6; % 飽和入力の制限 N
 
 FRAME_RATE = 30; % frame rate of the video
 TIMES_SPEED = 1800; %動画の時間の速度倍率
 SPACE_SIZE = [-0.4, 0.4]; % 衛星の初期位置の範囲
 INERTIAL_FRAME_SIMULATION_VIDEO_WINDOW_POSITION = [0, 100, 1280, 720]; % ウィンドウの位置　[left bottom width height]
-SAT1_FRAME_SIMULATION_VIDEO_WINDOW_POSITION = [100, 200, 1280, 720]; % ウィンドウの位置　[left bottom width height]
-FORCE_PLOT_WINDOW_POSITION = [200, 300, 1280, 720]; % ウィンドウの位置　[left bottom width height]
+SAT1_FRAME_SIMULATION_VIDEO_WINDOW_POSITION = [100, 150, 1280, 720]; % ウィンドウの位置　[left bottom width height]
+FORCE_PLOT_WINDOW_POSITION = [200, 200, 1280, 720]; % ウィンドウの位置　[left bottom width height]
 
 % 時系列モデル
 % z(k+1) = A * z(k) + b * v(k) + u(k)
 % r(k) = h(z(k)) + w(k)
 TIME_STEP = 1; % time step
 A = [eye(4),TIME_STEP * eye(4);...
-    zeros(4,4),eye(4)];
+    zeros(4,4),eye(4)]
 b = [0; 0; 0; 0; TIME_STEP/M; TIME_STEP/M; TIME_STEP/M; TIME_STEP/M];
 h = @(z) [sqrt(z(1).^2 + z(2).^2); sqrt(z(3).^2 + z(4).^2)];
-Q = 0;        % process noise variance
-R = 0;       % measurement noise variance
+Q = 1e-2;        % process noise variance
+R = 1e-2;       % measurement noise variance
 
 
 % 衛星の初期位置
@@ -53,15 +53,19 @@ zKf = [
 ];
 
 %u：制御入力
-u = [zeros(stepNum,4), M*TIME_STEP*diff(zKf(:,5:8))]; %1行目0にする必要あるか後で検討？
+u = [zeros(1,8);...
+    zeros(stepNum,4), TIME_STEP*diff(zKf(:,5:8))
+]; 
 Pz =  0.5 * eye(8); %共分散行列の初期値、SNRが大きい程係数を小さく設定する
 zHat0 = [(xr2-xr1)',(xr3-xr1)',zeros(1,4)];  %状態推定値の初期値
-zHat = [zHat0; zeros(stepNum-1, 8)];
-for i = 1:stepNum-1
+zHat = [zHat0; zeros(stepNum, 8)];
+for i = 1:stepNum
     r = h(zKf(i,:)) + sqrt(R) * randn(2,1);
     [zHatTemp, Pz] = halfUkf(A, b, h, Q, R, r, u(i,:)', zHat(i,:)', Pz);
     zHat(i+1,:) = zHatTemp';
 end
+
+disp(zHat);
 
 disp("satellite trajectory calculated.");
 disp("creating video...");
@@ -230,7 +234,7 @@ function [zHatNext, PzNext] = halfUkf(A, b, h, Q, R, r, u, zHat, Pz)
     PzMinus = A * Pz * A' + Q*(b*b');
     % 更新ステップ
     [rHatMinus, Prr, Prz] = unscentedTransform(h, zHatMinus, PzMinus);
-    g = Prz /(Prr + R);
+    g = Prz /(Prr + R*eye(2)); % 観測値は他の衛星の距離なので独立なノイズが乗ると考えられる
     zHatNext = zHatMinus + g * (r - rHatMinus);
     PzNext = PzMinus - g * Prz';
 end
@@ -246,9 +250,15 @@ function [ym, Pyy, Pxy] = unscentedTransform(f, xm, Pxx)
     L = chol(Pxx);
     X = [xm'; ones(n,1)*xm' + sqrt(n+kappa)*L; ones(n,1)*xm' - sqrt(n+kappa)*L];
     Y = mapcols(f, X')';
+    % disp(X);
+    % disp(Y);
     ym = sum(W*Y)';
     Yd = bsxfun(@minus,Y,ym');
     Xd = bsxfun(@minus,X,xm');
     Pyy = Yd'*W*Yd;
     Pxy = Xd'*W*Yd;
+    % disp("xm");
+    % disp(xm);
+    % disp("ym");
+    % disp(ym);
 end
