@@ -3,17 +3,24 @@ M = 1;
 A = [eye(4),TIME_STEP * eye(4);...
     zeros(4,4),eye(4)];
 b = [0; 0; 0; 0; TIME_STEP/M; TIME_STEP/M; TIME_STEP/M; TIME_STEP/M];
-h = @(z) [sqrt(z(1).^2 + z(2).^2); sqrt(z(3).^2 + z(4).^2)];
+h = @(z) [  sqrt(z(1).^2 + z(2).^2);...
+            sqrt((z(1)-z(3)).^2 + (z(2)-z(4)).^2);...
+            sqrt(z(3).^2 + z(4).^2);...
+            (z(1)*z(5)+z(2)*z(6))/sqrt(z(1)^2+z(2)^2);...
+            ((z(1)-z(3)*(z(5)-z(7))+(z(2)-z(4))*(z(6)-z(8)))/sqrt((z(1)-z(3))^2+(z(2)-z(4))^2));...
+            (z(3)*z(7)+z(4)*z(8))/sqrt(z(3)^2+z(4)^2)];
+            
 Q = 0;        % process noise variance
 R = 0;       % measurement noise variance
 
 % テストデータの設定
-r = [0.1834; 0.1087];
+%r = [0.1834; 0.1087];
 
 u = zeros(8,1);
 u(5:8) = 1.0e-07 * [0.0187; -0.0000; -0.1813; -0.2000];
 
 zHat = [0.0386; 0.0173; -0.0174; -0.0143; -0.0295; -0.0132; 0.0156; 0.0128];
+r = h(zHat)
 
 Pz = [
     0.7376   -0.0033    0.0010    0.0008    0.3485   -0.0006    0.0002    0.0001;
@@ -37,7 +44,7 @@ function [zHatNext, PzNext] = halfUkf(A, b, h, Q, R, r, u, zHat, Pz)
     PzMinus = A * Pz * A' 
     % 更新ステップ
     [rHatMinus, Prr, Prz] = unscentedTransform(h, zHatMinus, PzMinus)
-    g = Prz /(Prr + R*eye(2)) % 観測値は他の衛星の距離なので独立なノイズが乗ると考えられる
+    g = Prz /(Prr + R*eye(6)) % 観測値は他の衛星の距離なので独立なノイズが乗ると考えられる
     zHatNext = zHatMinus + g * (r - rHatMinus)
     PzNext = PzMinus - g * Prz'
     disp(g * Prz')

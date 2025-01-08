@@ -8,7 +8,7 @@ KD =  0.001;  % D gain
 SATURATION_LIMIT =  0.05e-6; % 飽和入力の制限 N
 
 FRAME_RATE = 30; % frame rate of the video
-TIMES_SPEED = 1800; %動画の時間の速度倍率
+TIMES_SPEED = 600; %動画の時間の速度倍率
 SPACE_SIZE = [-0.4, 0.4]; % 衛星の初期位置の範囲
 INERTIAL_FRAME_SIMULATION_VIDEO_WINDOW_POSITION = [0, 100, 1280, 720]; % ウィンドウの位置　[left bottom width height]
 SAT1_FRAME_SIMULATION_VIDEO_WINDOW_POSITION = [100, 150, 1280, 720]; % ウィンドウの位置　[left bottom width height]
@@ -21,15 +21,17 @@ TIME_STEP = 0.1; % time step
 A = [eye(4),TIME_STEP * eye(4);...
     zeros(4,4),eye(4)];
 b = [0; 0; 0; 0; TIME_STEP/M; TIME_STEP/M; TIME_STEP/M; TIME_STEP/M];
-h = @(z) [sqrt(z(1).^2 + z(2).^2); sqrt(z(3).^2 + z(4).^2)];
-Q = 0.001;        % process noise variance
-R = 0.0001;       % measurement noise variance
+h = @(z) [  sqrt(z(1).^2 + z(2).^2);...
+            sqrt((z(1)-z(3)).^2 + (z(2)-z(4)).^2);...
+            sqrt(z(3).^2 + z(4).^2)];
+Q = 0;        % process noise variance
+R = 0;       % measurement noise variance
 
 
 % 衛星の初期位置
-xr1 = [-0.2 + 0.4 * rand; -0.2 + 0.4 * rand];
-xr2 = [-0.2 + 0.4 * rand; -0.2 + 0.4 * rand];
-xr3 = [-0.2 + 0.4 * rand; -0.2 + 0.4 * rand];
+xr1 = [-0.1; -0.1];
+xr2 = [0.1; 0.1];
+xr3 = [0.1; -0.1];
 
 disp("calculating satellite trajectory...");
 % 衛星の初期位置 状態変数z = [x1, y1, x2, y2, x3, y3, vx1, vy1, vx2, vy2, vx3, vy3]
@@ -59,11 +61,24 @@ u = [zeros(1,8);...
 Pz =  0.5 * eye(8); %共分散行列の初期値、SNRが大きい程係数を小さく設定する
 zHat0 = [zKf(1,1:4),zeros(1,4)];  %状態推定値の初期値
 zHat = [zHat0; zeros(stepNum, 8)];
+
+zTest = [zHat0; zeros(stepNum, 8)];
 for i = 1:stepNum
-    r = h(zKf(i,:)) + sqrt(R) * randn(2,1);
+    zTest(i+1,:) = (A * zTest(i,:)')' +  u(i,:);  
+end
+disp("zKf");
+disp(zKf(8000:8100,:));
+disp("zTest");
+disp(zTest(8000:8100,:));
+
+for i = 1:stepNum
+    r = h(zKf(i,:)) + sqrt(R) * randn(3,1);
     [zHatTemp, Pz] = halfEkf(A, b, h, Q, R, r, u(i,:)', zHat(i,:)', Pz);
     zHat(i+1,:) = zHatTemp';
 end
+
+disp("zHat");
+disp(zHat(1:100,:));
 
 disp("satellite trajectory calculated.");
 disp("creating video...");
@@ -131,8 +146,8 @@ sat1FrameSimulationVideo.addStaticObject(zKf(1,3), zKf(1,4), 'b', 'x', 'Satellit
 sat1FrameSimulationVideo.addDynamicObject(zKf(:,1), zKf(:,2), 'g', 'o', '-', 'Satellite 2 Current Position', 'Satellite 2 Trajectory');
 sat1FrameSimulationVideo.addDynamicObject(zKf(:,3), zKf(:,4), 'b', 'o', '-', 'Satellite 3 Current Position', 'Satellite 3 Trajectory');
 
-sat1FrameSimulationVideo.addDynamicObject(zHat(:,1), zHat(:,2), 'g', '.', ':', 'Satellite 2 Estimated Position', 'Satellite 2 Estimated Trajectory');
-sat1FrameSimulationVideo.addDynamicObject(zHat(:,3), zHat(:,4), 'b', '.', ':', 'Satellite 3 Estimated Position', 'Satellite 3 Estimated Trajectory');
+% sat1FrameSimulationVideo.addDynamicObject(zHat(:,1), zHat(:,2), 'g', '.', ':', 'Satellite 2 Estimated Position', 'Satellite 2 Estimated Trajectory');
+% sat1FrameSimulationVideo.addDynamicObject(zHat(:,3), zHat(:,4), 'b', '.', ':', 'Satellite 3 Estimated Position', 'Satellite 3 Estimated Trajectory');
 
 sat1FrameSimulationVideo.writeVideo();
 
@@ -228,9 +243,10 @@ function [zHatNext, PzNext] = halfUkf(A, b, h, Q, R, r, u, zHat, Pz)
     % 予測ステップ
     zHatMinus = A * zHat + u;
     PzMinus = A * Pz * A' + Q*(b*b');
+    disp(PzMinus);
     % 更新ステップ
     [rHatMinus, Prr, Prz] = unscentedTransform(h, zHatMinus, PzMinus);
-    g = Prz /(Prr + R*eye(2)); % 観測値は他の衛星の距離なので独立なノイズが乗ると考えられる
+    g = Prz /(Prr + R*eye(6)); % 観測値は他の衛星の距離なので独立なノイズが乗ると考えられる
     zHatNext = zHatMinus + g * (r - rHatMinus);
     PzNext = PzMinus - g * Prz';
 end
@@ -239,7 +255,7 @@ function [yMean, Pyy, Pxy] = unscentedTransform(f, xMean, Pxx)
     % yMean = function(xMean)に対するU変換
     mapcols = @(f, x) cell2mat(cellfun(f,mat2cell(x,size(x,1),ones(1,size(x,2))),'UniformOutput',false));
     n = length(xMean);
-    kappa = 1;
+    kappa = 0;
     w0 = kappa/(n+kappa);
     wi = 1/(2*(n+kappa));
     W = diag([w0;wi*ones(2*n,1)]);
@@ -260,21 +276,27 @@ function [zHatNext, PzNext] = halfEkf(A, b, h, Q, R, r, u, zHat, Pz)
     
     % 更新ステップ
     % ヤコビアン行列の計算
-    H = zeros(2,8);
+    H = zeros(3,8);
     z1 = sqrt(zHatMinus(1)^2 + zHatMinus(2)^2);
-    z2 = sqrt(zHatMinus(3)^2 + zHatMinus(4)^2);
+    z2 = sqrt((zHatMinus(1)-zHatMinus(3))^2 + (zHatMinus(2)-zHatMinus(4))^2);
+    z3 = sqrt(zHatMinus(3)^2 + zHatMinus(4)^2);
     
-    % ∂h/∂x1, ∂h/∂y1
+    % h1 = sqrt(x1^2 + y1^2)
     H(1,1) = zHatMinus(1)/z1;
     H(1,2) = zHatMinus(2)/z1;
     
-    % ∂h/∂x2, ∂h/∂y2
-    H(2,3) = zHatMinus(3)/z2;
-    H(2,4) = zHatMinus(4)/z2;
+    % h2 = sqrt((x1 - x2)^2 + (y1 - y2)^2)
+    H(2,1) = (zHatMinus(1) - zHatMinus(3))/z2;
+    H(2,2) = (zHatMinus(2) - zHatMinus(4))/z2;
+    H(2,3) = (zHatMinus(3) - zHatMinus(1))/z2;
+    H(2,4) = (zHatMinus(4) - zHatMinus(2))/z2;
     
+    % h3 = sqrt(x2^2 + y2^2)
+    H(3,3) = zHatMinus(3)/z3;
+    H(3,4) = zHatMinus(4)/z3;
     % カルマンゲインの計算
     K = PzMinus * H' / (H * PzMinus * H' + R);
-    
+
     % 状態と共分散の更新
     zHatNext = zHatMinus + K * (r - h(zHatMinus));
     PzNext = (eye(8) - K * H) * PzMinus;
