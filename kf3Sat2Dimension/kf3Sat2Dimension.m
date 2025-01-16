@@ -58,30 +58,34 @@ zKf = [
 u = [zeros(1,8);...
     zeros(stepNum,4), diff(zKf(:,5:8))
 ]; 
-Pz =  0.5 * eye(8); %共分散行列の初期値、SNRが大きい程係数を小さく設定する
+Pz0 =  0.5 * eye(8); %共分散行列の初期値、SNRが大きい程係数を小さく設定する
 zHat0 = [zKf(1,1:4),zeros(1,4)];  %状態推定値の初期値
 zHat = [zHat0; zeros(stepNum, 8)];
+Pz = cat(3, Pz0, zeros(8,8,stepNum));
 
-zTest = [zHat0; zeros(stepNum, 8)];
-for i = 1:stepNum
-    zTest(i+1,:) = (A * zTest(i,:)')' +  u(i,:);  
-end
-disp("zKf");
-disp(zKf(8000:8100,:));
-disp("zTest");
-disp(zTest(8000:8100,:));
+stateFcn = @(z, u) Az+u+b*Q*randn(8,1);
+measurementFcn = @(z) h(z)+sqrt(R)*randn(3,1);    
 
-for i = 1:stepNum
-    r = h(zKf(i,:)) + sqrt(R) * randn(3,1);
-    [zHatTemp, Pz] = halfEkf(A, b, h, Q, R, r, u(i,:)', zHat(i,:)', Pz);
-    zHat(i+1,:) = zHatTemp';
+obj = unscentedKalmanFilter(@stateFcn,@measurementFcn,zHat0);
+for k = 1:stepNum
+    [zHat, Pz] = predict(obj, u(k,:));
 end
+
+
+
+% for i = 1:stepNum
+%     r = h(zKf(i,:)) + sqrt(R) * randn(3,1);
+%     [zHatTemp, Pz] = halfEkf(A, b, h, Q, R, r, u(i,:)', zHat(i,:)', Pz);
+%     zHat(i+1,:) = zHatTemp';
+% end
+
 
 disp("zHat");
 disp(zHat(1:100,:));
 
 disp("satellite trajectory calculated.");
 disp("creating video...");
+
 
 % 動画ファイルの設定
 if ~exist('result', 'dir')
