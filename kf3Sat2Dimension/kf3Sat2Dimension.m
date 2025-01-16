@@ -1,6 +1,6 @@
 % filepath: /c:/Users/daisu/Documents/GitHub/decentralized_position_estimation/kf3Sat2Dimension.m
 % 定数の定義
-SIMULATION_TIME = 10800;  % simulation time
+SIMULATION_TIME = 5400;  % simulation time
 L = 0.3;       % target distance
 M = 0.5;         % mass of the satellite
 KP = 0.000001; % P gain
@@ -12,18 +12,13 @@ TIMES_SPEED = 1800; %動画の時間の速度倍率
 SPACE_SIZE = [-0.4, 0.4]; % 衛星の初期位置の範囲
 INERTIAL_FRAME_SIMULATION_VIDEO_WINDOW_POSITION = [0, 100, 1280, 720]; % ウィンドウの位置　[left bottom width height]
 SAT1_FRAME_SIMULATION_VIDEO_WINDOW_POSITION = [100, 150, 1280, 720]; % ウィンドウの位置　[left bottom width height]
+ROTATED_SAT1_FRAME_SIMULATION_VIDEO_WINDOW_POSITION = [200, 200, 1280, 720]; % ウィンドウの位置　[left bottom width height]
 FORCE_PLOT_WINDOW_POSITION = [200, 200, 1280, 720]; % ウィンドウの位置　[left bottom width height]
 
 % 時系列モデル
 % z(k+1) = A * z(k) + b * v(k) + u(k)
 % r(k) = h(z(k)) + w(k)
 TIME_STEP = 0.1; % time step　[s]　ukfStateFcnの中の定義と一致させる
-A = [eye(4),TIME_STEP * eye(4);...
-    zeros(4,4),eye(4)];
-b = [0; 0; 0; 0; TIME_STEP/M; TIME_STEP/M; TIME_STEP/M; TIME_STEP/M];
-h = @(z) [  sqrt(z(1).^2 + z(2).^2);...
-            sqrt((z(1)-z(3)).^2 + (z(2)-z(4)).^2);...
-            sqrt(z(3).^2 + z(4).^2)];
 Q = 0.01;        % process noise variance
 R = 0.01;       % measurement noise variance
 
@@ -37,7 +32,8 @@ disp("calculating satellite trajectory...");
 % 衛星の初期位置 状態変数z = [x1, y1, x2, y2, x3, y3, vx1, vy1, vx2, vy2, vx3, vy3]
 z0 = [xr1(1), xr1(2), xr2(1), xr2(2), xr3(1), xr3(2), 0, 0, 0, 0, 0, 0];
 
-[t, z] = ode45(@(t, z) odeFcn(t, z, KP, KD, M, L, SATURATION_LIMIT), [0, SIMULATION_TIME], z0);
+options = odeset("MaxStep", TIME_STEP/2); %ODEの仕様か分からないが、なぜかこのシミュレーションではステップを小さくしないときれいな計算がされない
+[t, z] = ode45(@(t, z) odeFcn(t, z, KP, KD, M, L, SATURATION_LIMIT), [0, SIMULATION_TIME], z0, options);
 
 % Position estimation using Kalmanfilter
 % Create equally spaced time points
@@ -46,46 +42,52 @@ tDiscrete = (0:TIME_STEP:max(t))';
 zDiscrete = interp1(t, z, tDiscrete);
 stepNum = ceil(SIMULATION_TIME/TIME_STEP);
 
-zKf = [
+zSat1Frame = [
     zDiscrete(:,3)  - zDiscrete(:,1), zDiscrete(:,4)  - zDiscrete(:,2), zDiscrete(:,5)  - zDiscrete(:,1),  zDiscrete(:,6)  - zDiscrete(:,2), ...
-    zDiscrete(:,9)  - zDiscrete(:,7), zDiscrete(:,10) - zDiscrete(:,8), zDiscrete(:,11) - zDiscrete(:,7), zDiscrete(:,12) - zDiscrete(:,8)
-    ];
+    zDiscrete(:,9)  - zDiscrete(:,7), zDiscrete(:,10) - zDiscrete(:,8), zDiscrete(:,11) - zDiscrete(:,7), zDiscrete(:,12) - zDiscrete(:,8)];
 
-for i = 1:size(zKf,1)
+
+zSat1FrameRotated = zeros(size(zSat1Frame, 1), 6);
+for i = 1:size(zSat1Frame,1)
     % 0 <= ang < 2pi
-    if zKf(1) >= 0 && zKf(2) >= 0 
-        ang = atan(zKf(i,2)/zKf(i,1));
-    elseif zKf(1) < 0 && zKf(2) >= 0
-        ang = pi + atan(zKf(i,2)/zKf(i,1));
-    elseif zKf(1) < 0 && zKf(2) < 0
-        ang = pi + atan(zKf(i,2)/zKf(i,1));
+    if zSat1Frame(1) >= 0 && zSat1Frame(2) >= 0 
+        ang = atan(zSat1Frame(i,2)/zSat1Frame(i,1));
+    elseif zSat1Frame(1) < 0 && zSat1Frame(2) >= 0
+        ang = pi + atan(zSat1Frame(i,2)/zSat1Frame(i,1));
+    elseif zSat1Frame(1) < 0 && zSat1Frame(2) < 0
+        ang = pi + atan(zSat1Frame(i,2)/zSat1Frame(i,1));
     else
-        ang = 2*pi + atan(zKf(i,2)/zKf(i,1));
+        ang = 2*pi + atan(zSat1Frame(i,2)/zSat1Frame(i,1));
     end
-    rotater = [cos(ang), -sin(ang); sin(ang), cos(ang)];
-    zKf(i,1:2) = (rotater*zKf(i,1:2).').';
-    zKf(i,3:4) = (rotater*zKf(i,3:4).').';
-    zKf(i,5:6) = (rotater*zKf(i,5:6).').';
-    zKf(i,7:8) = (rotater*zKf(i,7:8).').';
+    rotater = [cos(-ang), -sin(-ang); sin(-ang), cos(-ang)];
+    r12 = sqrt(zSat1Frame(i,1)^2 + zSat1Frame(i,2)^2);
+    zSat1FrameRotated(i,1)      = r12;
+    zSat1FrameRotated(i,2:3)    = (rotater * zSat1Frame(i,3:4)')';
+    zSat1FrameRotated(i,4)      = (zSat1Frame(i,1)*zSat1Frame(i,5)+zSat1Frame(i,2)*zSat1Frame(i,6))/r12;
+    zSat1FrameRotated(i,5)      = (zSat1Frame(i,1)*zSat1Frame(i,7)-zSat1Frame(i,2)*zSat1Frame(i,8))/r12 ...
+                                + (zSat1Frame(i,1)*zSat1Frame(i,6)-zSat1Frame(i,5)*zSat1Frame(i,2))*(-zSat1Frame(i,2)*zSat1Frame(i,3)-zSat1Frame(i,1)*zSat1Frame(i,4))/r12^3;
+    zSat1FrameRotated(i,6)      = (zSat1Frame(i,1)*zSat1Frame(i,8)+zSat1Frame(i,2)*zSat1Frame(i,7))/r12 ...
+                                + (zSat1Frame(i,1)*zSat1Frame(i,6)-zSat1Frame(i,5)*zSat1Frame(i,2))*(zSat1Frame(i,1)*zSat1Frame(i,3)-zSat1Frame(i,2)*zSat1Frame(i,4))/r12^3;
 end
 
-disp(zKf);
+% disp(zSat1Frame);
 %u：制御入力
-u = [zeros(1,8);...
-    zeros(stepNum,4), diff(zKf(:,5:8))
+u = [zeros(1,6);...
+    zeros(stepNum,3), diff(zSat1FrameRotated(:,4:6))
 ]; 
-Pz0 =  0.5 * eye(8); %共分散行列の初期値、SNRが大きい程係数を小さく設定する
-zHat0 = [zKf(1,1:4),zeros(1,4)];  %状態推定値の初期値
-zHat = [zHat0; zeros(stepNum, 8)];
+Pz0 =  0.5 * eye(6); %共分散行列の初期値、SNRが大きい程係数を小さく設定する
+% zHat0 = [zSat1FrameRotated(1,1:3),zeros(1,3)];  %状態推定値の初期値
+zHat0 = zeros(1,6);
+zHat = [zHat0; zeros(stepNum, 6)];
 obj = unscentedKalmanFilter(@ukfStateFcn, @ukfMeasurementFcn, zHat0);
 obj.StateCovariance = Pz0;
-obj.ProcessNoise = Q*[zeros(4), zeros(4); zeros(4),TIME_STEP/M*eye(4)];
+obj.ProcessNoise = Q*[zeros(3), zeros(3); zeros(3),TIME_STEP/M*eye(3)];
 obj.MeasurementNoise = R;
 for k = 1:stepNum
     obj.predict(u(k,:)');
-    obj.correct([sqrt(zKf(k,1)^2 + zKf(k,2)^2);...
-                sqrt((zKf(k,1)-zKf(k,3))^2 + (zKf(k,2)-zKf(k,4))^2);...
-                sqrt(zKf(k,3)^2 + zKf(k,4)^2)]);
+    obj.correct([sqrt((zDiscrete(k,1)-zDiscrete(k,3))^2 + (zDiscrete(k,2)-zDiscrete(k,4))^2);...
+                sqrt((zDiscrete(k,3)-zDiscrete(k,5))^2 + (zDiscrete(k,4)-zDiscrete(k,6))^2);...
+                sqrt((zDiscrete(k,5)-zDiscrete(k,1))^2 + (zDiscrete(k,6)-zDiscrete(k,2))^2)]);
     zHat(k+1,:) = obj.State;
 end
 
@@ -113,12 +115,14 @@ end
 
 inertialFrameSimulationVideoFileName ='satellite_trajectory_in_inertial_frame';
 sat1FrameSimulationVideoFileName = 'satellite_trajectory_in_sat1_frame';
+rotatedSat1FrameSimulationVideoFileName = 'satellite_trajectory_in_sat1_frame_rotated';
 forcePlotFileName = 'satellites_control_force';
 
 fileIndex = 1;
 % 動画とforcePlotの両方を同じフォルダに保存するための重複チェック
 while exist(fullfile(baseDir, sprintf('%s_%d_%s.mp4', dateStr, fileIndex, inertialFrameSimulationVideoFileName)), 'file') ...
         || exist(fullfile(baseDir, sprintf('%s_%d_%s.mp4', dateStr, fileIndex, sat1FrameSimulationVideoFileName)), 'file') ...
+        || exist(fullfile(baseDir, sprintf('%s_%d_%s.mp4', dateStr, fileIndex, rotatedSat1FrameSimulationVideoFileName)), 'file') ...
         || exist(fullfile(baseDir, sprintf('%s_%d_%s.png', dateStr, fileIndex, forcePlotFileName)), 'file')
     fileIndex = fileIndex + 1;
 end
@@ -126,6 +130,7 @@ end
 % ファイル設定
 inertialFrameSimulationVideoFile = fullfile(baseDir, sprintf('%s_%d_%s.mp4', dateStr, fileIndex, inertialFrameSimulationVideoFileName));
 sat1FrameSimulationVideoFile = fullfile(baseDir, sprintf('%s_%d_%s.mp4', dateStr, fileIndex, sat1FrameSimulationVideoFileName));
+rotatedsat1FrameSimulationVideoFile = fullfile(baseDir, sprintf('%s_%d_%s.mp4', dateStr, fileIndex, rotatedSat1FrameSimulationVideoFileName));
 forcePlotFile = fullfile(baseDir, sprintf('%s_%d_%s.png', dateStr, fileIndex, forcePlotFileName));
 
 % 慣性系でのシミュレーション動画作成
@@ -151,16 +156,30 @@ sat1FrameSimulationVideo = simulationVideoWriter(FRAME_RATE, TIMES_SPEED, SIMULA
 sat1FrameSimulationVideo.addTime(tDiscrete);
 
 sat1FrameSimulationVideo.addStaticObject(0,0, 'r', 'o', 'Satellite 1');
-sat1FrameSimulationVideo.addStaticObject(zKf(1,1), zKf(1,2), 'g', 'x', 'Satellite 2 Initial Position');
-sat1FrameSimulationVideo.addStaticObject(zKf(1,3), zKf(1,4), 'b', 'x', 'Satellite 3 Initial Position');
+sat1FrameSimulationVideo.addStaticObject(zSat1Frame(1,1), zSat1Frame(1,2), 'g', 'x', 'Satellite 2 Initial Position');
+sat1FrameSimulationVideo.addStaticObject(zSat1Frame(1,3), zSat1Frame(1,4), 'b', 'x', 'Satellite 3 Initial Position');
 
-sat1FrameSimulationVideo.addDynamicObject(zKf(:,1), zKf(:,2), 'g', 'o', '-', 'Satellite 2 Current Position', 'Satellite 2 Trajectory');
-sat1FrameSimulationVideo.addDynamicObject(zKf(:,3), zKf(:,4), 'b', 'o', '-', 'Satellite 3 Current Position', 'Satellite 3 Trajectory');
-
-sat1FrameSimulationVideo.addDynamicObject(zHat(:,1), zHat(:,2), 'g', '.', ':', 'Satellite 2 Estimated Position', 'Satellite 2 Estimated Trajectory');
-sat1FrameSimulationVideo.addDynamicObject(zHat(:,3), zHat(:,4), 'b', '.', ':', 'Satellite 3 Estimated Position', 'Satellite 3 Estimated Trajectory');
+sat1FrameSimulationVideo.addDynamicObject(zSat1Frame(:,1), zSat1Frame(:,2), 'g', 'o', '-', 'Satellite 2 Current Position', 'Satellite 2 Trajectory');
+sat1FrameSimulationVideo.addDynamicObject(zSat1Frame(:,3), zSat1Frame(:,4), 'b', 'o', '-', 'Satellite 3 Current Position', 'Satellite 3 Trajectory');
 
 sat1FrameSimulationVideo.writeVideo();
+
+%衛星1系（回転済み）でのシミュレーション動画作成
+% simulationVideoWriterクラスを使用して動画を書き出す
+rotatedSat1FrameSimulationVideo = simulationVideoWriter(FRAME_RATE, TIMES_SPEED, SIMULATION_TIME, SPACE_SIZE, 'Simulation in Satellite 1 Frame Rotated', ROTATED_SAT1_FRAME_SIMULATION_VIDEO_WINDOW_POSITION, rotatedsat1FrameSimulationVideoFile);
+rotatedSat1FrameSimulationVideo.addTime(tDiscrete);
+
+rotatedSat1FrameSimulationVideo.addStaticObject(0,0, 'r', 'o', 'Satellite 1');
+rotatedSat1FrameSimulationVideo.addStaticObject(zSat1FrameRotated(1,1), 0, 'g', 'x', 'Satellite 2 Initial Position');
+rotatedSat1FrameSimulationVideo.addStaticObject(zSat1FrameRotated(1,2), zSat1FrameRotated(1,3), 'b', 'x', 'Satellite 3 Initial Position');
+
+rotatedSat1FrameSimulationVideo.addDynamicObject(zSat1FrameRotated(:,1), zeros(size(zSat1FrameRotated,1),1) , 'g', 'o', '-', 'Satellite 2 Current Position', 'Satellite 2 Trajectory');
+rotatedSat1FrameSimulationVideo.addDynamicObject(zSat1FrameRotated(:,2), zSat1FrameRotated(:,3), 'b', 'o', '-', 'Satellite 3 Current Position', 'Satellite 3 Trajectory');
+
+rotatedSat1FrameSimulationVideo.addDynamicObject(zHat(:,1), zeros(size(zHat,1),1) , 'g', '.', ':', 'Satellite 2 Estimated Position', 'Satellite 2 Estimated Trajectory');
+rotatedSat1FrameSimulationVideo.addDynamicObject(zHat(:,2), zHat(:,3), 'b', '.', ':', 'Satellite 3 Estimated Position', 'Satellite 3 Estimated Trajectory');
+
+rotatedSat1FrameSimulationVideo.writeVideo();
 
 disp("video created.");
 
@@ -249,14 +268,14 @@ end
 
 function z = ukfStateFcn(z, u)
     TIME_STEP = 0.1;
-    zDot = [
-
-    ];
+    A = [eye(3),TIME_STEP * eye(3);...
+        zeros(3,3),eye(3)];
+    z = A*z + u;
 end
 
 function y = ukfMeasurementFcn(z)
-    y = [  sqrt(z(1).^2 + z(2).^2);...
-            sqrt((z(1)-z(3)).^2 + (z(2)-z(4)).^2);...
-            sqrt(z(3).^2 + z(4).^2)];
+    y = [   z(1);...
+            sqrt((z(2)-z(1))^2 + z(3)^2);...
+            sqrt(z(2)^2 + z(3)^2)];
 end
 
