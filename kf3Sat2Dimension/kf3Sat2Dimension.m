@@ -8,7 +8,7 @@ KD =  0.001;  % D gain
 SATURATION_LIMIT =  0.05e-6; % 飽和入力の制限 N
 
 FRAME_RATE = 30; % frame rate of the video
-TIMES_SPEED = 600; %動画の時間の速度倍率
+TIMES_SPEED = 1800; %動画の時間の速度倍率
 SPACE_SIZE = [-0.4, 0.4]; % 衛星の初期位置の範囲
 INERTIAL_FRAME_SIMULATION_VIDEO_WINDOW_POSITION = [0, 100, 1280, 720]; % ウィンドウの位置　[left bottom width height]
 SAT1_FRAME_SIMULATION_VIDEO_WINDOW_POSITION = [100, 150, 1280, 720]; % ウィンドウの位置　[left bottom width height]
@@ -17,15 +17,15 @@ FORCE_PLOT_WINDOW_POSITION = [200, 200, 1280, 720]; % ウィンドウの位置�
 % 時系列モデル
 % z(k+1) = A * z(k) + b * v(k) + u(k)
 % r(k) = h(z(k)) + w(k)
-TIME_STEP = 0.1; % time step
+TIME_STEP = 0.1; % time step　[s]　ukfStateFcnの中の定義と一致させる
 A = [eye(4),TIME_STEP * eye(4);...
     zeros(4,4),eye(4)];
 b = [0; 0; 0; 0; TIME_STEP/M; TIME_STEP/M; TIME_STEP/M; TIME_STEP/M];
 h = @(z) [  sqrt(z(1).^2 + z(2).^2);...
             sqrt((z(1)-z(3)).^2 + (z(2)-z(4)).^2);...
             sqrt(z(3).^2 + z(4).^2)];
-Q = 0;        % process noise variance
-R = 0;       % measurement noise variance
+Q = 0.01;        % process noise variance
+R = 0.01;       % measurement noise variance
 
 
 % 衛星の初期位置
@@ -37,8 +37,7 @@ disp("calculating satellite trajectory...");
 % 衛星の初期位置 状態変数z = [x1, y1, x2, y2, x3, y3, vx1, vy1, vx2, vy2, vx3, vy3]
 z0 = [xr1(1), xr1(2), xr2(1), xr2(2), xr3(1), xr3(2), 0, 0, 0, 0, 0, 0];
 
-options = odeset("MaxStep", TIMES_SPEED/FRAME_RATE/2); % 最大ステップ幅を設定 アニメーションがカクカクにならないように
-[t, z] = ode45(@(t, z) odeFcn(t, z, KP, KD, M, L, SATURATION_LIMIT), [0, SIMULATION_TIME], z0,  options);
+[t, z] = ode45(@(t, z) odeFcn(t, z, KP, KD, M, L, SATURATION_LIMIT), [0, SIMULATION_TIME], z0);
 
 % Position estimation using Kalmanfilter
 % Create equally spaced time points
@@ -48,12 +47,29 @@ zDiscrete = interp1(t, z, tDiscrete);
 stepNum = ceil(SIMULATION_TIME/TIME_STEP);
 
 zKf = [
-    zDiscrete(:,3)  - zDiscrete(:,1),  zDiscrete(:,4)  - zDiscrete(:,2), ...
-    zDiscrete(:,5)  - zDiscrete(:,1),  zDiscrete(:,6)  - zDiscrete(:,2), ...
-    zDiscrete(:,9)  - zDiscrete(:,7),  zDiscrete(:,10) - zDiscrete(:,8), ...
-    zDiscrete(:,11) - zDiscrete(:,7),  zDiscrete(:,12) - zDiscrete(:,8)
-];
+    zDiscrete(:,3)  - zDiscrete(:,1), zDiscrete(:,4)  - zDiscrete(:,2), zDiscrete(:,5)  - zDiscrete(:,1),  zDiscrete(:,6)  - zDiscrete(:,2), ...
+    zDiscrete(:,9)  - zDiscrete(:,7), zDiscrete(:,10) - zDiscrete(:,8), zDiscrete(:,11) - zDiscrete(:,7), zDiscrete(:,12) - zDiscrete(:,8)
+    ];
 
+for i = 1:size(zKf,1)
+    % 0 <= ang < 2pi
+    if zKf(1) >= 0 && zKf(2) >= 0 
+        ang = atan(zKf(i,2)/zKf(i,1));
+    elseif zKf(1) < 0 && zKf(2) >= 0
+        ang = pi + atan(zKf(i,2)/zKf(i,1));
+    elseif zKf(1) < 0 && zKf(2) < 0
+        ang = pi + atan(zKf(i,2)/zKf(i,1));
+    else
+        ang = 2*pi + atan(zKf(i,2)/zKf(i,1));
+    end
+    rotater = [cos(ang), -sin(ang); sin(ang), cos(ang)];
+    zKf(i,1:2) = (rotater*zKf(i,1:2).').';
+    zKf(i,3:4) = (rotater*zKf(i,3:4).').';
+    zKf(i,5:6) = (rotater*zKf(i,5:6).').';
+    zKf(i,7:8) = (rotater*zKf(i,7:8).').';
+end
+
+disp(zKf);
 %u：制御入力
 u = [zeros(1,8);...
     zeros(stepNum,4), diff(zKf(:,5:8))
@@ -61,27 +77,18 @@ u = [zeros(1,8);...
 Pz0 =  0.5 * eye(8); %共分散行列の初期値、SNRが大きい程係数を小さく設定する
 zHat0 = [zKf(1,1:4),zeros(1,4)];  %状態推定値の初期値
 zHat = [zHat0; zeros(stepNum, 8)];
-Pz = cat(3, Pz0, zeros(8,8,stepNum));
-
-stateFcn = @(z, u) Az+u+b*Q*randn(8,1);
-measurementFcn = @(z) h(z)+sqrt(R)*randn(3,1);    
-
-obj = unscentedKalmanFilter(@stateFcn,@measurementFcn,zHat0);
+obj = unscentedKalmanFilter(@ukfStateFcn, @ukfMeasurementFcn, zHat0);
+obj.StateCovariance = Pz0;
+obj.ProcessNoise = Q*[zeros(4), zeros(4); zeros(4),TIME_STEP/M*eye(4)];
+obj.MeasurementNoise = R;
 for k = 1:stepNum
-    [zHat, Pz] = predict(obj, u(k,:));
+    obj.predict(u(k,:)');
+    obj.correct([sqrt(zKf(k,1)^2 + zKf(k,2)^2);...
+                sqrt((zKf(k,1)-zKf(k,3))^2 + (zKf(k,2)-zKf(k,4))^2);...
+                sqrt(zKf(k,3)^2 + zKf(k,4)^2)]);
+    zHat(k+1,:) = obj.State;
 end
 
-
-
-% for i = 1:stepNum
-%     r = h(zKf(i,:)) + sqrt(R) * randn(3,1);
-%     [zHatTemp, Pz] = halfEkf(A, b, h, Q, R, r, u(i,:)', zHat(i,:)', Pz);
-%     zHat(i+1,:) = zHatTemp';
-% end
-
-
-disp("zHat");
-disp(zHat(1:100,:));
 
 disp("satellite trajectory calculated.");
 disp("creating video...");
@@ -124,17 +131,17 @@ forcePlotFile = fullfile(baseDir, sprintf('%s_%d_%s.png', dateStr, fileIndex, fo
 % 慣性系でのシミュレーション動画作成
 % simulationVideoWriterクラスを使用して動画を書き出す
 inertialFrameSimulationVideo = simulationVideoWriter(FRAME_RATE, TIMES_SPEED, SIMULATION_TIME, SPACE_SIZE, 'Simulation in Inertial Frame', INERTIAL_FRAME_SIMULATION_VIDEO_WINDOW_POSITION, inertialFrameSimulationVideoFile);
-inertialFrameSimulationVideo.addTime(t); % 時間を追加
+inertialFrameSimulationVideo.addTime(tDiscrete); % 時間を追加
 
 % 初期位置を追加
-inertialFrameSimulationVideo.addStaticObject(z(1, 1), z(1, 2), 'r', 'x', 'Satellite 1 Initial Position'); 
-inertialFrameSimulationVideo.addStaticObject(z(1, 3), z(1, 4), 'g', 'x', 'Satellite 2 Initial Position'); 
-inertialFrameSimulationVideo.addStaticObject(z(1, 5), z(1, 6), 'b', 'x', 'Satellite 3 Initial Position'); 
+inertialFrameSimulationVideo.addStaticObject(zDiscrete(1, 1), zDiscrete(1, 2), 'r', 'x', 'Satellite 1 Initial Position'); 
+inertialFrameSimulationVideo.addStaticObject(zDiscrete(1, 3), zDiscrete(1, 4), 'g', 'x', 'Satellite 2 Initial Position');
+inertialFrameSimulationVideo.addStaticObject(zDiscrete(1, 5), zDiscrete(1, 6), 'b', 'x', 'Satellite 3 Initial Position');
 
 % 動的オブジェクトを追加
-inertialFrameSimulationVideo.addDynamicObject(z(:, 1), z(:, 2), 'r', 'o', '-', 'Satellite 1 Current Position', 'Satellite 1 Trajectory'); 
-inertialFrameSimulationVideo.addDynamicObject(z(:, 3), z(:, 4), 'g', 'o', '-', 'Satellite 2 Current Position', 'Satellite 2 Trajectory');
-inertialFrameSimulationVideo.addDynamicObject(z(:, 5), z(:, 6), 'b', 'o', '-', 'Satellite 3 Current Position', 'Satellite 3 Trajectory'); 
+inertialFrameSimulationVideo.addDynamicObject(zDiscrete(:, 1), zDiscrete(:, 2), 'r', 'o', '-', 'Satellite 1 Current Position', 'Satellite 1 Trajectory');
+inertialFrameSimulationVideo.addDynamicObject(zDiscrete(:, 3), zDiscrete(:, 4), 'g', 'o', '-', 'Satellite 2 Current Position', 'Satellite 2 Trajectory');
+inertialFrameSimulationVideo.addDynamicObject(zDiscrete(:, 5), zDiscrete(:, 6), 'b', 'o', '-', 'Satellite 3 Current Position', 'Satellite 3 Trajectory');
 
 inertialFrameSimulationVideo.writeVideo();
 
@@ -150,8 +157,8 @@ sat1FrameSimulationVideo.addStaticObject(zKf(1,3), zKf(1,4), 'b', 'x', 'Satellit
 sat1FrameSimulationVideo.addDynamicObject(zKf(:,1), zKf(:,2), 'g', 'o', '-', 'Satellite 2 Current Position', 'Satellite 2 Trajectory');
 sat1FrameSimulationVideo.addDynamicObject(zKf(:,3), zKf(:,4), 'b', 'o', '-', 'Satellite 3 Current Position', 'Satellite 3 Trajectory');
 
-% sat1FrameSimulationVideo.addDynamicObject(zHat(:,1), zHat(:,2), 'g', '.', ':', 'Satellite 2 Estimated Position', 'Satellite 2 Estimated Trajectory');
-% sat1FrameSimulationVideo.addDynamicObject(zHat(:,3), zHat(:,4), 'b', '.', ':', 'Satellite 3 Estimated Position', 'Satellite 3 Estimated Trajectory');
+sat1FrameSimulationVideo.addDynamicObject(zHat(:,1), zHat(:,2), 'g', '.', ':', 'Satellite 2 Estimated Position', 'Satellite 2 Estimated Trajectory');
+sat1FrameSimulationVideo.addDynamicObject(zHat(:,3), zHat(:,4), 'b', '.', ':', 'Satellite 3 Estimated Position', 'Satellite 3 Estimated Trajectory');
 
 sat1FrameSimulationVideo.writeVideo();
 
@@ -240,68 +247,16 @@ function dydt = odeFcn(t, y, KP, KD, M, L, SATURATION_LIMIT)
     dydt(12) = max(min(u6, SATURATION_LIMIT/M), -SATURATION_LIMIT/M);
 end
 
-function [zHatNext, PzNext] = halfUkf(A, b, h, Q, R, r, u, zHat, Pz)
-    % 時系列モデル
-    % z(k+1) = A * z(k) + b * v(k) + u(k)
-    % r(k) = h(z(k)) + w(k)
-    % 予測ステップ
-    zHatMinus = A * zHat + u;
-    PzMinus = A * Pz * A' + Q*(b*b');
-    disp(PzMinus);
-    % 更新ステップ
-    [rHatMinus, Prr, Prz] = unscentedTransform(h, zHatMinus, PzMinus);
-    g = Prz /(Prr + R*eye(6)); % 観測値は他の衛星の距離なので独立なノイズが乗ると考えられる
-    zHatNext = zHatMinus + g * (r - rHatMinus);
-    PzNext = PzMinus - g * Prz';
+function z = ukfStateFcn(z, u)
+    TIME_STEP = 0.1;
+    zDot = [
+
+    ];
 end
 
-function [yMean, Pyy, Pxy] = unscentedTransform(f, xMean, Pxx)
-    % yMean = function(xMean)に対するU変換
-    mapcols = @(f, x) cell2mat(cellfun(f,mat2cell(x,size(x,1),ones(1,size(x,2))),'UniformOutput',false));
-    n = length(xMean);
-    kappa = 0;
-    w0 = kappa/(n+kappa);
-    wi = 1/(2*(n+kappa));
-    W = diag([w0;wi*ones(2*n,1)]);
-    L = chol(Pxx, "lower");
-    X = [xMean'; ones(n,1)*xMean' + sqrt(n+kappa)*L; ones(n,1)*xMean' - sqrt(n+kappa)*L];
-    Y = mapcols(f, X')';
-    yMean = sum(W*Y)';
-    Yd = Y - ones(2*n+1,1)*yMean';
-    Xd = X - ones(2*n+1,1)*xMean';
-    Pyy = Yd'*W*Yd;
-    Pxy = Xd'*W*Yd;
+function y = ukfMeasurementFcn(z)
+    y = [  sqrt(z(1).^2 + z(2).^2);...
+            sqrt((z(1)-z(3)).^2 + (z(2)-z(4)).^2);...
+            sqrt(z(3).^2 + z(4).^2)];
 end
 
-function [zHatNext, PzNext] = halfEkf(A, b, h, Q, R, r, u, zHat, Pz)
-    % 予測ステップ
-    zHatMinus = A * zHat + u;
-    PzMinus = A * Pz * A' + Q*(b*b');
-    
-    % 更新ステップ
-    % ヤコビアン行列の計算
-    H = zeros(3,8);
-    z1 = sqrt(zHatMinus(1)^2 + zHatMinus(2)^2);
-    z2 = sqrt((zHatMinus(1)-zHatMinus(3))^2 + (zHatMinus(2)-zHatMinus(4))^2);
-    z3 = sqrt(zHatMinus(3)^2 + zHatMinus(4)^2);
-    
-    % h1 = sqrt(x1^2 + y1^2)
-    H(1,1) = zHatMinus(1)/z1;
-    H(1,2) = zHatMinus(2)/z1;
-    
-    % h2 = sqrt((x1 - x2)^2 + (y1 - y2)^2)
-    H(2,1) = (zHatMinus(1) - zHatMinus(3))/z2;
-    H(2,2) = (zHatMinus(2) - zHatMinus(4))/z2;
-    H(2,3) = (zHatMinus(3) - zHatMinus(1))/z2;
-    H(2,4) = (zHatMinus(4) - zHatMinus(2))/z2;
-    
-    % h3 = sqrt(x2^2 + y2^2)
-    H(3,3) = zHatMinus(3)/z3;
-    H(3,4) = zHatMinus(4)/z3;
-    % カルマンゲインの計算
-    K = PzMinus * H' / (H * PzMinus * H' + R);
-
-    % 状態と共分散の更新
-    zHatNext = zHatMinus + K * (r - h(zHatMinus));
-    PzNext = (eye(8) - K * H) * PzMinus;
-end
