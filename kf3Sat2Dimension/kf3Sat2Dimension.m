@@ -1,6 +1,6 @@
 % filepath: /c:/Users/daisu/Documents/GitHub/decentralized_position_estimation/kf3Sat2Dimension.m
 % 定数の定義
-SIMULATION_TIME = 5400;  % simulation time
+SIMULATION_TIME = 10800;  % simulation time
 L = 0.3;       % target distance
 M = 0.5;         % mass of the satellite
 KP = 0.000001; % P gain
@@ -19,14 +19,14 @@ FORCE_PLOT_WINDOW_POSITION = [200, 200, 1280, 720]; % ウィンドウの位置�
 % z(k+1) = A * z(k) + b * v(k) + u(k)
 % r(k) = h(z(k)) + w(k)
 TIME_STEP = 0.1; % time step　[s]　ukfStateFcnの中の定義と一致させる
-Q = 0.01;        % process noise variance
-R = 0.01;       % measurement noise variance
+Q = 0.0001;        % process noise variance
+R = 0.0001;       % measurement noise variance
 
 
 % 衛星の初期位置
-xr1 = [-0.1; -0.1];
-xr2 = [0.1; 0.1];
-xr3 = [0.1; -0.1];
+xr1 = [-0.2+0.4*rand(), -0.2+0.4*rand()];
+xr2 = [-0.2+0.4*rand(), -0.2+0.4*rand()];
+xr3 = [-0.2+0.4*rand(), -0.2+0.4*rand()];
 
 disp("calculating satellite trajectory...");
 % 衛星の初期位置 状態変数z = [x1, y1, x2, y2, x3, y3, vx1, vy1, vx2, vy2, vx3, vy3]
@@ -66,8 +66,8 @@ for i = 1:size(zSat1Frame,1)
     zSat1FrameRotated(i,4)      = (zSat1Frame(i,1)*zSat1Frame(i,5)+zSat1Frame(i,2)*zSat1Frame(i,6))/r12;
     zSat1FrameRotated(i,5)      = (zSat1Frame(i,1)*zSat1Frame(i,7)-zSat1Frame(i,2)*zSat1Frame(i,8))/r12 ...
                                 + (zSat1Frame(i,1)*zSat1Frame(i,6)-zSat1Frame(i,5)*zSat1Frame(i,2))*(-zSat1Frame(i,2)*zSat1Frame(i,3)-zSat1Frame(i,1)*zSat1Frame(i,4))/r12^3;
-    zSat1FrameRotated(i,6)      = (zSat1Frame(i,1)*zSat1Frame(i,8)+zSat1Frame(i,2)*zSat1Frame(i,7))/r12 ...
-                                + (zSat1Frame(i,1)*zSat1Frame(i,6)-zSat1Frame(i,5)*zSat1Frame(i,2))*(zSat1Frame(i,1)*zSat1Frame(i,3)-zSat1Frame(i,2)*zSat1Frame(i,4))/r12^3;
+    zSat1FrameRotated(i,6)      = -(zSat1Frame(i,1)*zSat1Frame(i,8)+zSat1Frame(i,2)*zSat1Frame(i,7))/r12 ...
+                                - (zSat1Frame(i,1)*zSat1Frame(i,6)-zSat1Frame(i,5)*zSat1Frame(i,2))*(zSat1Frame(i,1)*zSat1Frame(i,3)-zSat1Frame(i,2)*zSat1Frame(i,4))/r12^3;
 end
 
 % disp(zSat1Frame);
@@ -76,8 +76,8 @@ u = [zeros(1,6);...
     zeros(stepNum,3), diff(zSat1FrameRotated(:,4:6))
 ]; 
 Pz0 =  0.5 * eye(6); %共分散行列の初期値、SNRが大きい程係数を小さく設定する
-% zHat0 = [zSat1FrameRotated(1,1:3),zeros(1,3)];  %状態推定値の初期値
-zHat0 = zeros(1,6);
+zHat0 = [zSat1FrameRotated(1,1:3),zeros(1,3)];  %状態推定値の初期値
+%zHat0 = zeros(1,6);
 zHat = [zHat0; zeros(stepNum, 6)];
 obj = unscentedKalmanFilter(@ukfStateFcn, @ukfMeasurementFcn, zHat0);
 obj.StateCovariance = Pz0;
