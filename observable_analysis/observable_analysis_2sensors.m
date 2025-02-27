@@ -2,7 +2,7 @@
 %% Constants
 SENSOR_FOV = 90;        % degrees
 SNSOR_RANGE = 1;         % meters
-COMMUNICATION_RANGE = 3; % meters
+COM_RANGE = 3; % meters
 N = 1000;
 SPACE_DIAMETER = 10;
 PLOT_RANGE = SPACE_DIAMETER/2 + 1;
@@ -17,7 +17,7 @@ attitudes = 360 * rand(N, 1);  % satellite attitude angles in degrees
 %% Generate adjacency matrices for two sensors (front and back)
 sensorObservableMatrix_front = zeros(N);
 sensorObservableMatrix_back  = zeros(N);
-communicationMatrix = zeros(N);
+comMatrix = zeros(N);
 
 for i = 1:N
     % Front sensor: pointing in the direction of satellite's attitude
@@ -60,17 +60,17 @@ for i = 1:N
         dx = points(j,1) - points(i,1);
         dy = points(j,2) - points(i,2);
         distance = sqrt(dx^2 + dy^2);
-        if distance <= COMMUNICATION_RANGE
-            communicationMatrix(i,j) = 1;
-            communicationMatrix(j,i) = 1;
+        if distance <= COM_RANGE
+            comMatrix(i,j) = 1;
+            comMatrix(j,i) = 1;
         end
     end
 end
 
 %% Combine both sensor matrices (logical OR)
 sensorObservableMatrix_total = sensorObservableMatrix_front | sensorObservableMatrix_back;
-visionObservableMatrix = sensorObservableMatrix_total & communicationMatrix;
-lidarObservableMatrix  = sensorObservableMatrix_total & sensorObservableMatrix_total' & communicationMatrix;
+visionObservableMatrix = sensorObservableMatrix_total & comMatrix;
+lidarObservableMatrix  = sensorObservableMatrix_total & sensorObservableMatrix_total' & comMatrix;
 
 %% Prepare save folder and filename constant string
 saveFolder = fullfile('result', 'observable_analysis', '2sensors');
@@ -89,7 +89,7 @@ saveFigureFHD(fig1, ['SensorObservableGraph_' constStr], saveFolder);
 
 %% Plot and save Communication Graph
 fig2 = figure('Units','normalized','OuterPosition',[0 0 1 1]);
-p2 = plot(graph(communicationMatrix), 'XData', points(:,1), 'YData', points(:,2));
+p2 = plot(graph(comMatrix), 'XData', points(:,1), 'YData', points(:,2));
 title('Communication Graph');
 axis equal;
 saveFigureFHD(fig2, ['CommunicationGraph_' constStr], saveFolder);

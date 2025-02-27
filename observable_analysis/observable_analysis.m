@@ -1,7 +1,7 @@
 % Constants
-SENSOR_FOV = 120; % degrees
+SENSOR_FOV = 10; % degrees
 SNSOR_RANGE = 1; % meters
-COMMUNICATION_RANGE = 3; % meters
+COM_RANGE = 3; % meters
 N = 1000;
 SPACE_DIAMETER = 10;
 
@@ -18,7 +18,7 @@ attitudes = 360 * rand(N, 1);  % Generate a random column vector of N satellite 
 
 % Generate adjacency matrix
 sensorObservableMatrix = zeros(N);
-communicationMatrix = zeros(N);
+comMatrix = zeros(N);
 
 for i = 1:N
     
@@ -59,15 +59,15 @@ for i = 1:N
         distance = sqrt(dx^2 + dy^2);
         
         % Check if satellite j is within communication range of satellite i
-        if distance <= COMMUNICATION_RANGE
-            communicationMatrix(i,j) = 1;
-            communicationMatrix(j,i) = 1;
+        if distance <= COM_RANGE
+            comMatrix(i,j) = 1;
+            comMatrix(j,i) = 1;
         end
     end
 end
 
-visionObservableMatrix = sensorObservableMatrix & communicationMatrix;
-lidarObservableMatrix  = sensorObservableMatrix & sensorObservableMatrix' & communicationMatrix;
+visionObservableMatrix = sensorObservableMatrix & comMatrix;
+lidarObservableMatrix  = sensorObservableMatrix & sensorObservableMatrix' & comMatrix;
 
 % 保存先フォルダの準備
 saveFolder = fullfile('result', 'observable_analysis', '1sensor');
@@ -88,14 +88,14 @@ saveFigureFHD(fig1, ['SensorObservableGraph_' constStr], saveFolder);
 
 %% Communication Graph
 fig2 = figure('Units','normalized','OuterPosition',[0 0 1 1]);
-p2 = plot(graph(communicationMatrix), 'XData', points(:,1), 'YData', points(:,2));
+p2 = plot(graph(comMatrix), 'XData', points(:,1), 'YData', points(:,2));
 title('Communication Graph');
 axis equal;
 saveFigureFHD(fig2, ['CommunicationGraph_' constStr], saveFolder);
 
 %% Vision Observable Graph
 fig3 = figure('Units','normalized','OuterPosition',[0 0 1 1]);
-p3 = plot(digraph(sensorObservableMatrix & communicationMatrix), 'XData', points(:,1), 'YData', points(:,2), ...
+p3 = plot(digraph(sensorObservableMatrix & comMatrix), 'XData', points(:,1), 'YData', points(:,2), ...
     'EdgeAlpha', 0.5, 'LineWidth', 1.5, 'ArrowSize', 12);
 title('Vision Observable Graph');
 axis equal;
@@ -103,7 +103,7 @@ saveFigureFHD(fig3, ['VisionObservableGraph_' constStr], saveFolder);
 
 %% Lidar Observable Graph
 fig4 = figure('Units','normalized','OuterPosition',[0 0 1 1]);
-p4 = plot(graph(sensorObservableMatrix & sensorObservableMatrix' & communicationMatrix), 'XData', points(:,1), 'YData', points(:,2));
+p4 = plot(graph(sensorObservableMatrix & sensorObservableMatrix' & comMatrix), 'XData', points(:,1), 'YData', points(:,2));
 title('Lidar Observable Graph');
 axis equal;
 saveFigureFHD(fig4, ['LidarObservableGraph_' constStr], saveFolder);
