@@ -37,8 +37,9 @@ for i = 1:N
         if distance <= SNSOR_RANGE
             % Calculate the angle from satellite i to satellite j
             targetAngle = atan2(dy, dx);
-            % Compute the minimal angular difference, wrapped between -pi and pi
+            % Compute the minimal angular difference
             angleDiff = targetAngle - sensorAngle;
+            angleDiff = mod(angleDiff + pi, 2*pi) - pi;
             if abs(angleDiff) <= deg2rad(SENSOR_FOV/2)
                 sensorObservableMatrix(i,j) = 1;
             end
@@ -113,6 +114,7 @@ hold on;
 axis equal;
 scatter(points(:,1), points(:,2), 25, 'b', 'filled');
 arcPoints = 20;
+
 for k = 1:N
     x0 = points(k,1);
     y0 = points(k,2);
